@@ -4,18 +4,19 @@
 
 <style>
 	.footer {
-		position: fixed;
-		bottom: 0;
-		left: 0;
-		right: 0;
 		width: 100%;
-		padding: 0.5rem;
+		padding: 2rem 0.5rem 3rem;
 		display: flex;
 		justify-content: center;
 		align-items: center;
-		z-index: 100;
 		background: var(--bg-primary);
 		transition: background-color 0.3s ease;
+	}
+
+	@media (max-width: 768px) {
+		.footer {
+			padding: 2rem 0.5rem 1.5rem;
+		}
 	}
 
 	.disclaimer {

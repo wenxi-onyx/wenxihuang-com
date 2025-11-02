@@ -13,9 +13,15 @@
 
 	<section class="features">
 		<div class="cards-container">
-			<FeatureCard title="WIP" status="inactive" delay="0.7s" />
-			<FeatureCard title="PING PONG" status="active" href="/ping-pong" delay="0.5s" />
-			<FeatureCard title="MULTIPLAYER CHATGPT" status="inactive" delay="0.7s" />
+			<div class="card-wrapper card-1">
+				<FeatureCard title="WIP" status="inactive" delay="0.5s" />
+			</div>
+			<div class="card-wrapper card-2">
+				<FeatureCard title="PING PONG" status="active" href="/ping-pong" delay="0.3s" />
+			</div>
+			<div class="card-wrapper card-3">
+				<FeatureCard title="MULTIPLAYER CHATGPT" status="inactive" delay="0.7s" />
+			</div>
 		</div>
 	</section>
 </main>
@@ -51,18 +57,45 @@
 		}
 	}
 
+	/* Desktop: wrappers are transparent, grid handles layout */
+	@media (min-width: 769px) {
+		.card-wrapper {
+			display: contents;
+		}
+	}
+
 	@media (max-width: 768px) {
 		.landing-page {
 			min-height: auto;
-			padding: 1rem;
+			padding: 3.5rem 1rem 2rem;
 			gap: 2rem;
 		}
 
 		.cards-container {
-			grid-template-columns: 1fr;
+			display: flex;
+			flex-direction: column;
 			gap: 2rem;
 			width: 100%;
 			max-width: 400px;
+		}
+
+		/* Mobile: wrappers become flex items for reordering */
+		.card-wrapper {
+			display: block;
+			width: 100%;
+		}
+
+		/* Reorder cards on mobile: Ping Pong first */
+		.card-2 {
+			order: 1;
+		}
+
+		.card-1 {
+			order: 2;
+		}
+
+		.card-3 {
+			order: 3;
 		}
 	}
 </style>

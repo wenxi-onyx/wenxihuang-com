@@ -39,4 +39,13 @@
 		background: #000000;
 		color: #ffffff;
 	}
+
+	@media (max-width: 768px) {
+		.login-btn {
+			top: 1rem;
+			right: 1rem;
+			padding: 0.375rem 1rem;
+			font-size: 0.75rem;
+		}
+	}
 </style>

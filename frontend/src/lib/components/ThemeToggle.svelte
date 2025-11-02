@@ -43,4 +43,16 @@
 		color: var(--text-primary);
 		transition: color 0.3s ease;
 	}
+
+	@media (max-width: 768px) {
+		.theme-toggle {
+			top: 1rem;
+			left: 1rem;
+			padding: 0.25rem;
+		}
+
+		.icon {
+			font-size: 1.25rem;
+		}
+	}
 </style>
