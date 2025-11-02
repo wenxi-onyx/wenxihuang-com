@@ -1,5 +1,7 @@
-.env*
+# Environment variables
+.env
 .env.*
+!.env.example
 
 # Rust build artifacts
 /target/
@@ -9,3 +11,7 @@
 # Testing
 coverage/
 *.profraw
+
+# IDE (in case not caught by root)
+.vscode/
+.idea/

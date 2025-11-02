@@ -1,0 +1,39 @@
+# Development environment
+.env
+.env.*
+!.env.example
+
+# Rust build artifacts
+target/
+**/*.rs.bk
+*.pdb
+
+# Testing
+coverage/
+*.profraw
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# CI/CD
+.github/
+
+# Documentation
+README.md
+*.md
+
+# Fly.io (keep fly.toml - it's needed!)
+# But exclude this:
+.dockerignore

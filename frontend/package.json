@@ -38,6 +38,7 @@
 		"vite": "^7.1.10"
 	},
 	"dependencies": {
+		"@sveltejs/adapter-node": "^5.4.0",
 		"chart.js": "^4.5.1",
 		"marked": "^16.4.1"
 	}

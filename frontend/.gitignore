@@ -1,18 +1,22 @@
-node_modules
+# Dependencies
+node_modules/
 
-# Output
-.output
-.vercel
-.netlify
-.wrangler
-/.svelte-kit
-/build
+# Build outputs
+/.svelte-kit/
+/build/
+.output/
+dist/
+
+# Platform-specific
+.vercel/
+.netlify/
+.wrangler/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Env
+# Environment variables
 .env
 .env.*
 !.env.example
@@ -21,3 +25,7 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# IDE (in case not caught by root)
+.vscode/
+.idea/
