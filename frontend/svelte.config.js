@@ -19,7 +19,9 @@ const config = {
 					return;
 				}
 				throw new Error(message);
-			}
+			},
+			// Handle routes that weren't found during crawling (like catchall routes)
+			handleUnseenRoutes: 'ignore'
 		}
 	}
 };

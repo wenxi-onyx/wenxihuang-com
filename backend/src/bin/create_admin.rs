@@ -1,60 +1,26 @@
-use sqlx::postgres::PgPoolOptions;
-use std::io::{self, Write};
+use argon2::{
+    Argon2,
+    password_hash::{PasswordHasher, SaltString, rand_core::OsRng},
+};
+use std::env;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Load environment variables
-    dotenvy::dotenv().ok();
+fn main() {
+    let args: Vec<String> = env::args().collect();
 
-    // Create database connection pool
-    let database_url = std::env::var("DATABASE_URL")?;
-    let pool = PgPoolOptions::new()
-        .max_connections(1)
-        .connect(&database_url)
-        .await?;
+    if args.len() < 2 {
+        eprintln!("Usage: create_admin <password>");
+        std::process::exit(1);
+    }
 
-    // Get username and password from command line args or prompt
-    let args: Vec<String> = std::env::args().collect();
-
-    let username = if args.len() > 1 {
-        args[1].clone()
-    } else {
-        print!("Enter admin username: ");
-        io::stdout().flush()?;
-        let mut username = String::new();
-        io::stdin().read_line(&mut username)?;
-        username.trim().to_string()
-    };
-
-    let password = if args.len() > 2 {
-        args[2].clone()
-    } else {
-        print!("Enter admin password: ");
-        io::stdout().flush()?;
-        rpassword::read_password()?
-    };
-
-    // Hash password
-    use argon2::{
-        Argon2,
-        password_hash::{PasswordHasher, SaltString, rand_core::OsRng},
-    };
+    let password = &args[1];
 
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
+
     let password_hash = argon2
         .hash_password(password.as_bytes(), &salt)
-        .map_err(|e| format!("Failed to hash password: {}", e))?
+        .expect("Failed to hash password")
         .to_string();
 
-    // Create admin user
-    sqlx::query("INSERT INTO users (username, password_hash, role) VALUES ($1, $2, 'admin')")
-        .bind(username)
-        .bind(password_hash)
-        .execute(&pool)
-        .await?;
-
-    println!("Admin user created successfully!");
-
-    Ok(())
+    println!("{}", password_hash);
 }

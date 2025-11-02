@@ -14,26 +14,47 @@ mod models;
 mod services;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load environment variables
     dotenvy::dotenv().ok();
 
     // Initialize tracing
     tracing_subscriber::fmt::init();
 
-    // Create database connection pool
+    // Validate required environment variables
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let session_secret = std::env::var("SESSION_SECRET").expect("SESSION_SECRET must be set");
 
+    // Validate session secret length (should be at least 32 bytes)
+    if session_secret.len() < 32 {
+        panic!("SESSION_SECRET must be at least 32 characters long");
+    }
+
+    tracing::info!("Environment variables loaded successfully");
+
+    // Create database connection pool with better settings for production
     let pool = PgPoolOptions::new()
-        .max_connections(5)
+        .max_connections(20) // Increased from 5 for better concurrency
+        .acquire_timeout(std::time::Duration::from_secs(30))
         .connect(&database_url)
         .await
-        .expect("Failed to create pool");
+        .map_err(|e| {
+            tracing::error!("Failed to connect to database: {}", e);
+            e
+        })?;
+
+    tracing::info!("Database connection pool created successfully");
 
     // Auth routes
     let auth_routes = Router::new()
         .route("/login", post(handlers::auth::login))
-        .route("/register", post(handlers::auth::register))
+        .route(
+            "/register",
+            post(handlers::auth::register).route_layer(axum::middleware::from_fn_with_state(
+                pool.clone(),
+                self::middleware::auth::require_admin,
+            )),
+        )
         .route(
             "/logout",
             post(handlers::auth::logout).route_layer(axum::middleware::from_fn_with_state(
@@ -58,12 +79,28 @@ async fn main() {
         .layer(CookieManagerLayer::new())
         .layer(self::middleware::cors::cors_layer());
 
-    // Run it on 0.0.0.0:8080
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    // Get port from environment or use default
+    let port = std::env::var("PORT")
+        .unwrap_or_else(|_| "8080".to_string())
+        .parse::<u16>()
+        .unwrap_or(8080);
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     tracing::info!("Starting server on {}", addr);
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| {
+        tracing::error!("Failed to bind to {}: {}", addr, e);
+        e
+    })?;
+
+    tracing::info!("Server listening on {}", addr);
+
+    axum::serve(listener, app).await.map_err(|e| {
+        tracing::error!("Server error: {}", e);
+        e
+    })?;
+
+    Ok(())
 }
 
 async fn root() -> Json<Value> {
