@@ -1,0 +1,22 @@
+repos:
+  # General pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+
+  # Rust hooks
+  - repo: https://github.com/doublify/pre-commit-rust
+    rev: v1.0
+    hooks:
+      - id: fmt
+        args: ['--manifest-path', 'backend/Cargo.toml', '--']
+      - id: cargo-check
+        args: ['--manifest-path', 'backend/Cargo.toml']
+      - id: clippy
+        args: ['--manifest-path', 'backend/Cargo.toml', '--', '-D', 'warnings']

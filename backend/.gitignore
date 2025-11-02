@@ -1,0 +1,11 @@
+.env*
+.env.*
+
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Testing
+coverage/
+*.profraw
