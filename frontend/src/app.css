@@ -1,3 +1,47 @@
+/* Fashion typography */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=Noto+Sans+JP:wght@100;200;300;400&display=swap');
+
 @import 'tailwindcss';
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
+
+/* Dual-Theme System: French Brutalism (Dark) + Japanese Minimalism (Light) */
+
+:root {
+	/* Dark Mode - French Brutalism */
+	--bg-primary: #000000;
+	--text-primary: #ffffff;
+	--text-secondary: #cccccc;
+	--text-tertiary: #808080;
+	--border-subtle: rgba(255, 255, 255, 0.15);
+	--border-active: rgba(255, 255, 255, 0.4);
+}
+
+[data-theme='light'] {
+	/* Light Mode - Japanese Minimalism */
+	--bg-primary: #ffffff;
+	--text-primary: #000000;
+	--text-secondary: #666666;
+	--text-tertiary: #999999;
+	--border-subtle: rgba(0, 0, 0, 0.08);
+	--border-active: rgba(0, 0, 0, 0.2);
+}
+
+/* Global styles */
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html,
+body {
+	background: var(--bg-primary);
+	color: var(--text-primary);
+	transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+html {
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+		sans-serif;
+}
