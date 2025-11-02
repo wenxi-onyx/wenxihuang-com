@@ -6,7 +6,21 @@ const config = {
 	preprocess: vitePreprocess(),
 
 	kit: {
-		adapter: adapter()
+		adapter: adapter({
+			// Enable brotli and gzip compression for all assets
+			precompress: true
+		}),
+		prerender: {
+			// Handle missing routes gracefully during prerendering
+			handleHttpError: ({ path, referrer, message }) => {
+				// Ignore 404 errors for routes that don't exist yet
+				if (message.includes('404')) {
+					console.warn(`Skipping ${path} (linked from ${referrer})`);
+					return;
+				}
+				throw new Error(message);
+			}
+		}
 	}
 };
 

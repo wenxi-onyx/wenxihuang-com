@@ -31,7 +31,13 @@ const createThemeStore = () => {
 			localStorage.setItem('theme', newTheme);
 			set(newTheme);
 		},
+		syncTheme: (theme: Theme) => {
+			if (!browser) return;
+			set(theme);
+		},
 		init: () => {
+			// Deprecated: Theme is now initialized in app.html inline script
+			// Kept for backwards compatibility
 			if (!browser) return;
 
 			const theme = getInitialTheme();

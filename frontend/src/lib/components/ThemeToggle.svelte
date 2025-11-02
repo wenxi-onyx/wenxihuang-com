@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { theme } from '$lib/stores/theme';
-	import { onMount } from 'svelte';
 
-	let currentTheme: 'dark' | 'light' = 'dark';
+	let currentTheme: 'dark' | 'light' = $state('dark');
 
-	onMount(() => {
-		theme.init();
-		theme.subscribe((value) => {
+	// Subscribe to theme changes
+	$effect(() => {
+		const unsubscribe = theme.subscribe((value) => {
 			currentTheme = value;
 		});
+		return unsubscribe;
 	});
 </script>
 

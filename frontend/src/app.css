@@ -1,5 +1,4 @@
-/* Fashion typography */
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=Noto+Sans+JP:wght@100;200;300;400&display=swap');
+/* Fashion typography - fonts loaded async in app.html for better performance */
 
 @import 'tailwindcss';
 @plugin '@tailwindcss/forms';
