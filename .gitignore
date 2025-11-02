@@ -21,6 +21,9 @@ Thumbs.db
 # Dependencies
 node_modules/
 
+# Rust build artifacts
+target/
+
 # Logs
 *.log
 npm-debug.log*
