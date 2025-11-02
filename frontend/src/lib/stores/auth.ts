@@ -1,0 +1,71 @@
+import { writable } from 'svelte/store';
+import { authApi, type User } from '$lib/api/client';
+import { goto } from '$app/navigation';
+
+export interface AuthState {
+    user: User | null;
+    loading: boolean;
+}
+
+function createAuthStore() {
+    const { subscribe, set, update } = writable<AuthState>({
+        user: null,
+        loading: true,
+    });
+
+    return {
+        subscribe,
+
+        async checkAuth() {
+            try {
+                const response = await authApi.getCurrentUser();
+                set({ user: response.user, loading: false });
+                return response.user;
+            } catch (error) {
+                set({ user: null, loading: false });
+                return null;
+            }
+        },
+
+        async login(email: string, password: string) {
+            try {
+                const response = await authApi.login({ email, password });
+                set({ user: response.user, loading: false });
+                goto('/');
+                return { success: true, user: response.user };
+            } catch (error) {
+                return {
+                    success: false,
+                    error: error instanceof Error ? error.message : 'Login failed'
+                };
+            }
+        },
+
+        async logout() {
+            try {
+                await authApi.logout();
+                set({ user: null, loading: false });
+                goto('/login');
+            } catch (error) {
+                console.error('Logout failed:', error);
+                // Clear user anyway
+                set({ user: null, loading: false });
+                goto('/login');
+            }
+        },
+
+        async register(email: string, password: string, role: 'admin' | 'user') {
+            try {
+                const response = await authApi.register({ email, password, role });
+                return { success: true, user: response.user };
+            } catch (error) {
+                return {
+                    success: false,
+                    error: error instanceof Error ? error.message : 'Registration failed'
+                };
+            }
+        },
+    };
+}
+
+export const authStore = createAuthStore();
