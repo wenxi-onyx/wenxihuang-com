@@ -10,15 +10,15 @@ CREATE TABLE users (
     username VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     role user_role NOT NULL DEFAULT 'user',
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Create sessions table
 CREATE TABLE sessions (
     id VARCHAR(128) PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    expires_at TIMESTAMP NOT NULL,
-    last_accessed TIMESTAMP NOT NULL DEFAULT NOW()
+    expires_at TIMESTAMPTZ NOT NULL,
+    last_accessed TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Create indexes for sessions

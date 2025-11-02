@@ -8,7 +8,7 @@ use sqlx::postgres::PgPoolOptions;
 #[derive(Debug, sqlx::FromRow)]
 struct User {
     id: uuid::Uuid,
-    email: String,
+    username: String,
     password_hash: String,
     role: String, // Just use String for testing
 }
@@ -27,18 +27,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("✓ Connected to database");
 
-    // Step 1: Find user by email (same query as User::find_by_email)
-    let email = "wenxi";
-    println!("\n1. Finding user with email: '{}'", email);
+    // Step 1: Find user by username (same query as User::find_by_username)
+    let username = "wenxi";
+    println!("\n1. Finding user with username: '{}'", username);
 
     let user: User = sqlx::query_as(
-        "SELECT id, email, password_hash, role::text as role FROM users WHERE email = $1",
+        "SELECT id, username, password_hash, role::text as role FROM users WHERE username = $1",
     )
-    .bind(email)
+    .bind(username)
     .fetch_one(&pool)
     .await?;
 
-    println!("✓ Found user: {}", user.email);
+    println!("✓ Found user: {}", user.username);
     println!("  ID: {}", user.id);
     println!("  Role: {}", user.role);
 
