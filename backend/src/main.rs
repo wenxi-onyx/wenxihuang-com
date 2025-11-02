@@ -1,25 +1,19 @@
 use axum::{Json, Router, routing::get};
 use serde_json::{Value, json};
 use std::net::SocketAddr;
-use tower_http::cors::{Any, CorsLayer};
+
+mod middleware;
 
 #[tokio::main]
 async fn main() {
     // Initialize tracing
     tracing_subscriber::fmt::init();
 
-    // Create CORS layer
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any)
-        .allow_credentials(true);
-
     // Build our application with routes
     let app = Router::new()
         .route("/", get(root))
         .route("/health", get(health))
-        .layer(cors);
+        .layer(middleware::cors::cors_layer());
 
     // Run it with hyper on 0.0.0.0:8080
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
