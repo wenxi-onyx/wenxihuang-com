@@ -5,7 +5,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct User {
     pub id: Uuid,
-    pub email: String,
+    pub username: String,
     pub password_hash: String,
     pub role: UserRole,
     #[allow(dead_code)]
@@ -20,18 +20,18 @@ pub enum UserRole {
 }
 
 impl User {
-    pub async fn find_by_email(pool: &PgPool, email: &str) -> Result<User, sqlx::Error> {
+    pub async fn find_by_username(pool: &PgPool, username: &str) -> Result<User, sqlx::Error> {
         sqlx::query_as::<_, User>(
-            "SELECT id, email, password_hash, role, created_at FROM users WHERE email = $1",
+            "SELECT id, username, password_hash, role, created_at FROM users WHERE username = $1",
         )
-        .bind(email)
+        .bind(username)
         .fetch_one(pool)
         .await
     }
 
     pub async fn find_by_id(pool: &PgPool, id: Uuid) -> Result<User, sqlx::Error> {
         sqlx::query_as::<_, User>(
-            "SELECT id, email, password_hash, role, created_at FROM users WHERE id = $1",
+            "SELECT id, username, password_hash, role, created_at FROM users WHERE id = $1",
         )
         .bind(id)
         .fetch_one(pool)
@@ -40,16 +40,16 @@ impl User {
 
     pub async fn create(
         pool: &PgPool,
-        email: &str,
+        username: &str,
         password_hash: &str,
         role: UserRole,
     ) -> Result<User, sqlx::Error> {
         sqlx::query_as::<_, User>(
-            "INSERT INTO users (email, password_hash, role)
+            "INSERT INTO users (username, password_hash, role)
              VALUES ($1, $2, $3)
-             RETURNING id, email, password_hash, role, created_at",
+             RETURNING id, username, password_hash, role, created_at",
         )
-        .bind(email)
+        .bind(username)
         .bind(password_hash)
         .bind(role)
         .fetch_one(pool)

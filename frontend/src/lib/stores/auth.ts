@@ -27,9 +27,9 @@ function createAuthStore() {
             }
         },
 
-        async login(email: string, password: string) {
+        async login(username: string, password: string) {
             try {
-                const response = await authApi.login({ email, password });
+                const response = await authApi.login({ username, password });
                 set({ user: response.user, loading: false });
                 goto('/');
                 return { success: true, user: response.user };
@@ -54,9 +54,9 @@ function createAuthStore() {
             }
         },
 
-        async register(email: string, password: string, role: 'admin' | 'user') {
+        async register(username: string, password: string, role: 'admin' | 'user') {
             try {
-                const response = await authApi.register({ email, password, role });
+                const response = await authApi.register({ username, password, role });
                 return { success: true, user: response.user };
             } catch (error) {
                 return {

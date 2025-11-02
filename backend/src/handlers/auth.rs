@@ -11,13 +11,13 @@ use crate::services::session::{create_session, delete_session, validate_session}
 
 #[derive(Debug, Deserialize)]
 pub struct LoginRequest {
-    pub email: String,
+    pub username: String,
     pub password: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct RegisterRequest {
-    pub email: String,
+    pub username: String,
     pub password: String,
     pub role: UserRole,
 }
@@ -30,7 +30,7 @@ pub struct AuthResponse {
 #[derive(Debug, Serialize)]
 pub struct UserInfo {
     pub id: uuid::Uuid,
-    pub email: String,
+    pub username: String,
     pub role: UserRole,
 }
 
@@ -38,7 +38,7 @@ impl From<User> for UserInfo {
     fn from(user: User) -> Self {
         UserInfo {
             id: user.id,
-            email: user.email,
+            username: user.username,
             role: user.role,
         }
     }
@@ -50,8 +50,8 @@ pub async fn login(
     cookies: Cookies,
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, AuthError> {
-    // Find user by email
-    let user = User::find_by_email(&pool, &req.email)
+    // Find user by username
+    let user = User::find_by_username(&pool, &req.username)
         .await
         .map_err(|_| AuthError::InvalidCredentials)?;
 
@@ -66,7 +66,8 @@ pub async fn login(
     // Create secure cookie (30 days)
     let mut cookie = Cookie::new("session_id", session_id);
     cookie.set_http_only(true);
-    cookie.set_secure(true);
+    // Only require HTTPS in production
+    cookie.set_secure(cfg!(not(debug_assertions)));
     cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
     cookie.set_max_age(Duration::days(30));
     cookie.set_path("/");
@@ -92,7 +93,8 @@ pub async fn logout(
     // Remove cookie
     let mut cookie = Cookie::new("session_id", "");
     cookie.set_http_only(true);
-    cookie.set_secure(true);
+    // Only require HTTPS in production
+    cookie.set_secure(cfg!(not(debug_assertions)));
     cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
     cookie.set_max_age(Duration::ZERO);
     cookie.set_path("/");
@@ -124,16 +126,16 @@ pub async fn register(
     State(pool): State<PgPool>,
     Json(req): Json<RegisterRequest>,
 ) -> Result<Json<AuthResponse>, AuthError> {
-    // Check if email already exists
-    if User::find_by_email(&pool, &req.email).await.is_ok() {
-        return Err(AuthError::EmailAlreadyExists);
+    // Check if username already exists
+    if User::find_by_username(&pool, &req.username).await.is_ok() {
+        return Err(AuthError::UsernameAlreadyExists);
     }
 
     // Hash password
     let password_hash = hash_password(&req.password)?;
 
     // Create user
-    let user = User::create(&pool, &req.email, &password_hash, req.role)
+    let user = User::create(&pool, &req.username, &password_hash, req.role)
         .await
         .map_err(|_| AuthError::DatabaseError)?;
 

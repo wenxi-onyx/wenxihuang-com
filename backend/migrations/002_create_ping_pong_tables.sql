@@ -1,7 +1,8 @@
 -- Create players table
 CREATE TABLE players (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) UNIQUE NOT NULL,
+    first_name VARCHAR(255) NOT NULL,
+    last_name VARCHAR(255) NOT NULL,
     current_elo FLOAT NOT NULL DEFAULT 1000.0,
     profile_pic BYTEA,  -- Small profile image stored directly (max 15 players, ~100-200KB each)
     created_at TIMESTAMP NOT NULL DEFAULT NOW()

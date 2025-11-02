@@ -13,17 +13,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect(&database_url)
         .await?;
 
-    // Get email and password from command line args or prompt
+    // Get username and password from command line args or prompt
     let args: Vec<String> = std::env::args().collect();
 
-    let email = if args.len() > 1 {
+    let username = if args.len() > 1 {
         args[1].clone()
     } else {
-        print!("Enter admin email: ");
+        print!("Enter admin username: ");
         io::stdout().flush()?;
-        let mut email = String::new();
-        io::stdin().read_line(&mut email)?;
-        email.trim().to_string()
+        let mut username = String::new();
+        io::stdin().read_line(&mut username)?;
+        username.trim().to_string()
     };
 
     let password = if args.len() > 2 {
@@ -48,8 +48,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .to_string();
 
     // Create admin user
-    sqlx::query("INSERT INTO users (email, password_hash, role) VALUES ($1, $2, 'admin')")
-        .bind(email)
+    sqlx::query("INSERT INTO users (username, password_hash, role) VALUES ($1, $2, 'admin')")
+        .bind(username)
         .bind(password_hash)
         .execute(&pool)
         .await?;

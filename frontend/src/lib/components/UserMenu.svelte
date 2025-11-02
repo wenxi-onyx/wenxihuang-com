@@ -25,9 +25,9 @@
             class="flex items-center space-x-2 hover:opacity-80 focus:outline-none transition-opacity"
         >
             <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-semibold">
-                {user.email.charAt(0).toUpperCase()}
+                {user.username.charAt(0).toUpperCase()}
             </div>
-            <span class="hidden md:block font-medium">{user.email}</span>
+            <span class="hidden md:block font-medium">{user.username}</span>
             <span class="px-2 py-1 text-xs font-semibold rounded-full {user.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'}">
                 {user.role}
             </span>

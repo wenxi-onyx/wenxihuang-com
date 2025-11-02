@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
-	let email = '';
+	let username = '';
 	let password = '';
 	let loading = false;
 	let error = '';
@@ -19,15 +19,15 @@
 	});
 
 	async function handleSubmit() {
-		if (!email || !password) {
-			error = 'Please enter both email and password';
+		if (!username || !password) {
+			error = 'Please enter both username and password';
 			return;
 		}
 
 		loading = true;
 		error = '';
 
-		const result = await authStore.login(email, password);
+		const result = await authStore.login(username, password);
 
 		if (!result.success) {
 			error = result.error || 'Login failed';
@@ -47,8 +47,6 @@
 
 <main class="login-page">
 	<div class="login-content">
-		<h1 class="title">SIGN IN</h1>
-
 		{#if error}
 			<div class="error-message">
 				{error}
@@ -57,14 +55,14 @@
 
 		<form class="login-form" on:submit|preventDefault={handleSubmit}>
 			<div class="form-group">
-				<label for="email">EMAIL</label>
+				<label for="username">USERNAME</label>
 				<input
-					id="email"
-					name="email"
-					type="email"
-					autocomplete="email"
+					id="username"
+					name="username"
+					type="text"
+					autocomplete="username"
 					required
-					bind:value={email}
+					bind:value={username}
 					on:keypress={handleKeyPress}
 					disabled={loading}
 				/>
@@ -99,7 +97,6 @@
 
 <style>
 	.login-page {
-		min-height: 100vh;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -114,6 +111,7 @@
 		gap: 2rem;
 		width: 100%;
 		max-width: 400px;
+		margin-top: 25vh;
 	}
 
 	.title {

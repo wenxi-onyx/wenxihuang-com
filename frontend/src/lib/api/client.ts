@@ -4,7 +4,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 export interface User {
     id: string;
-    email: string;
+    username: string;
     role: 'admin' | 'user';
 }
 
@@ -13,12 +13,12 @@ export interface AuthResponse {
 }
 
 export interface LoginRequest {
-    email: string;
+    username: string;
     password: string;
 }
 
 export interface RegisterRequest {
-    email: string;
+    username: string;
     password: string;
     role: 'admin' | 'user';
 }

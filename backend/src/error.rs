@@ -14,14 +14,14 @@ pub enum AuthError {
     SessionExpired,
     DatabaseError,
     HashingError,
-    EmailAlreadyExists,
+    UsernameAlreadyExists,
 }
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
             AuthError::InvalidCredentials => {
-                (StatusCode::UNAUTHORIZED, "Invalid email or password")
+                (StatusCode::UNAUTHORIZED, "Invalid username or password")
             }
             AuthError::Unauthorized => (StatusCode::UNAUTHORIZED, "Authentication required"),
             AuthError::Forbidden => (StatusCode::FORBIDDEN, "Insufficient permissions"),
@@ -30,7 +30,7 @@ impl IntoResponse for AuthError {
             AuthError::HashingError => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Password hashing error")
             }
-            AuthError::EmailAlreadyExists => (StatusCode::CONFLICT, "Email already registered"),
+            AuthError::UsernameAlreadyExists => (StatusCode::CONFLICT, "Username already taken"),
         };
 
         let body = Json(json!({
