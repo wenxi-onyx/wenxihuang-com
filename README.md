@@ -40,21 +40,44 @@
 
 ### 1. Database Setup
 
-Start a local PostgreSQL instance:
+**Recommended: Using docker-compose**
+
+The easiest way to set up PostgreSQL locally:
 
 ```bash
-# Recommended: Using docker-compose (port 5433 to avoid conflicts)
+# Start PostgreSQL (from project root)
 docker-compose up -d
 
-# Or using Docker directly
-docker run --name wenxihuang-db \
+# Verify it's running
+docker ps | grep wenxihuang-postgres-dev
+
+# View logs
+docker-compose logs postgres
+
+# Stop when done
+docker-compose stop
+
+# Start again later
+docker-compose start
+```
+
+**Alternative: Using Docker directly**
+
+```bash
+docker run --name wenxihuang-postgres-dev \
   -e POSTGRES_PASSWORD=postgres \
   -e POSTGRES_DB=wenxihuang_dev \
   -p 5433:5432 \
   -d postgres:17
+```
 
-# Or use your system PostgreSQL
+**Alternative: System PostgreSQL**
+
+```bash
+# Create database on your local PostgreSQL
 createdb wenxihuang_dev
+
+# Update backend/.env to use port 5432 instead of 5433
 ```
 
 **Note**: Local development uses port **5433** instead of 5432 to avoid conflicts with other PostgreSQL instances.
