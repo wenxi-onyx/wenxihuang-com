@@ -10,7 +10,7 @@ export interface AuthState {
 function createAuthStore() {
     const { subscribe, set, update } = writable<AuthState>({
         user: null,
-        loading: true,
+        loading: false, // Start as false - auth check happens in background
     });
 
     return {
