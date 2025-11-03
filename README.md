@@ -43,16 +43,21 @@
 Start a local PostgreSQL instance:
 
 ```bash
-# Using Docker
+# Recommended: Using docker-compose (port 5433 to avoid conflicts)
+docker-compose up -d
+
+# Or using Docker directly
 docker run --name wenxihuang-db \
   -e POSTGRES_PASSWORD=postgres \
   -e POSTGRES_DB=wenxihuang_dev \
-  -p 5432:5432 \
+  -p 5433:5432 \
   -d postgres:17
 
 # Or use your system PostgreSQL
 createdb wenxihuang_dev
 ```
+
+**Note**: Local development uses port **5433** instead of 5432 to avoid conflicts with other PostgreSQL instances.
 
 ### 2. Backend Setup
 
@@ -62,10 +67,10 @@ cd backend
 # Copy environment template
 cp .env.example .env
 
-# Edit .env with your local database URL
-# DATABASE_URL=postgresql://postgres:postgres@localhost:5432/wenxihuang_dev
+# Edit .env with your local configuration
+# DATABASE_URL=postgresql://postgres:postgres@localhost:5433/wenxihuang_dev
 # SESSION_SECRET=your-random-secret-key-here
-# PORT=8080
+# PORT=8083
 
 # Run migrations
 # (Note: Current implementation runs migrations on app startup via SQLx)
@@ -74,7 +79,9 @@ cp .env.example .env
 cargo run
 ```
 
-The backend will be available at `http://localhost:8080`
+The backend will be available at `http://localhost:8083`
+
+**Note**: Local development uses port **8083** instead of 8080 to avoid conflicts. Production uses port 8080.
 
 ### 3. Frontend Setup
 
@@ -85,7 +92,7 @@ cd frontend
 cp .env.example .env
 
 # Edit .env
-# VITE_API_URL=http://localhost:8080
+# VITE_API_URL=http://localhost:8083
 
 # Install dependencies
 npm ci
@@ -94,7 +101,7 @@ npm ci
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:5173`
+The frontend will be available at `http://localhost:5173` (auto-increments to 5174, 5175... if port is taken)
 
 ### 4. Create First Admin User
 
@@ -154,12 +161,9 @@ VALUES ('admin', 'PASTE_HASH_HERE', 'admin');
    flyctl secrets set \
      SESSION_SECRET=$(openssl rand -base64 32) \
      -a wenxihuang-backend
-
-   # Frontend environment (if needed)
-   flyctl secrets set \
-     VITE_API_URL=https://wenxihuang-backend.fly.dev \
-     -a wenxihuang-frontend
    ```
+
+   **Note**: Frontend API URL is configured via `fly.toml` build args (see `frontend/fly.toml`), not secrets. The `VITE_API_URL` must be set at build time for Vite to embed it in the compiled JavaScript.
 
 ### Deploying Updates
 
@@ -184,9 +188,15 @@ flyctl deploy
 ```
 
 This will:
-1. Build SvelteKit app with Vite
-2. Create production Node.js server
-3. Deploy to Fly.io
+1. Build SvelteKit app with Vite (VITE_API_URL from fly.toml build args)
+2. Pre-render static pages (landing page)
+3. Create production Node.js server
+4. Deploy to Fly.io
+
+**Important**:
+- Landing page is pre-rendered at build time for better performance
+- Login page uses client-side rendering (SSR disabled for auth)
+- API URL is baked into the build via `VITE_API_URL` build arg in `fly.toml`
 
 ### Deployment Verification
 
@@ -463,16 +473,44 @@ cat backend/migrations/001_create_users_and_sessions.sql | \
 
 ### Frontend Not Connecting to Backend
 
-1. Check `VITE_API_URL` environment variable:
-   ```bash
-   flyctl secrets list -a wenxihuang-frontend
+1. **Check API URL Configuration**:
+   The `VITE_API_URL` must be set at build time in `frontend/fly.toml`:
+   ```toml
+   [build.args]
+     VITE_API_URL = "https://wenxihuang-backend.fly.dev"
    ```
 
-2. Verify CORS configuration in `backend/src/middleware/cors.rs`:
+   Verify it's embedded in the build:
+   ```bash
+   flyctl ssh console -a wenxihuang-frontend -C "grep -r 'wenxihuang-backend' /app/build"
+   ```
+
+2. **Verify CORS Configuration** in `backend/src/middleware/cors.rs`:
    - Should allow `https://wenxihuang-frontend.fly.dev`
    - Should allow `https://wenxihuang.com` if using custom domain
 
-3. Check browser console for CORS errors
+3. **Check Browser Console** for CORS or network errors
+
+### Login Page Shows "Load Failed"
+
+If you see a "load failed" error on the login page:
+
+1. **Check Prerender Configuration**:
+   - Layout should have `prerender = 'auto'` in `src/routes/+layout.ts`
+   - Login page should have `prerender = false` in `src/routes/login/+page.ts`
+
+2. **Verify No Loading Blocker**:
+   - Layout should not block rendering waiting for auth check
+   - Auth check should happen in background (see `src/routes/+layout.svelte`)
+
+3. **Check Build Logs**:
+   ```bash
+   flyctl logs -a wenxihuang-frontend
+   ```
+   Look for build errors or warnings about prerendering
+
+4. **Verify API URL in Browser**:
+   Open browser dev tools → Network tab → Check if API calls go to correct backend URL
 
 ## Development Workflow
 
@@ -524,9 +562,7 @@ npm run check    # TypeScript type checking
 | `/api/auth/login` | POST | No | Login with username/password |
 | `/api/auth/logout` | POST | Yes | Logout current session |
 | `/api/auth/me` | GET | Yes | Get current user info |
-| `/api/auth/register` | POST | No* | Create new user (should be admin-only) |
-
-*Note: Registration currently has no permission check - see Security Considerations
+| `/api/auth/register` | POST | Yes (Admin) | Create new user (admin-only) |
 
 ### Request/Response Examples
 
@@ -555,12 +591,18 @@ curl https://wenxihuang-backend.fly.dev/api/auth/me \
 
 ## Security Considerations
 
+### Fixed Issues
+
+1. ✅ **Registration Endpoint**: Now protected with admin-only middleware
+2. ✅ **Session Secret**: Enforced 32+ character minimum, loaded from environment
+3. ✅ **Error Handling**: All panics (`unwrap()`/`expect()`) replaced with proper error handling
+4. ✅ **CORS Configuration**: Now environment-based and validated
+
 ### Current Issues
 
-1. **Registration Endpoint**: Currently open to anyone - should require admin authentication
-2. **Session Secret**: Must be set via environment variable in production
-3. **Password Policy**: No complexity requirements enforced
-4. **Rate Limiting**: Not implemented - vulnerable to brute force attacks
+1. **Password Policy**: No complexity requirements enforced
+2. **Rate Limiting**: Not implemented - vulnerable to brute force attacks
+3. **Session Rotation**: Sessions don't have automatic rotation on privilege changes
 
 ### Recommended Practices
 
@@ -570,9 +612,30 @@ curl https://wenxihuang-backend.fly.dev/api/auth/me \
 - Keep dependencies updated
 - Review security audit in code review documentation
 
-## Production Monitoring
+## Production Configuration
 
-### Key Metrics to Watch
+### Resource Optimization
+
+Current setup is optimized for minimal resource usage (1-2 concurrent users):
+
+- **Frontend**: 1 machine, 256MB RAM, shared CPU
+  - Auto-stop when idle (min_machines_running = 0)
+  - Auto-start on request
+- **Backend**: 1 machine, 256MB RAM, shared CPU
+- **Database**: 1 machine, 256MB RAM, shared CPU
+
+```bash
+# View current machine configuration
+flyctl machines list -a wenxihuang-frontend
+flyctl machines list -a wenxihuang-backend
+
+# Remove extra machines if needed
+flyctl machines remove MACHINE_ID -a wenxihuang-frontend --force
+```
+
+### Monitoring
+
+Key metrics to watch:
 
 ```bash
 # Application status
@@ -659,6 +722,16 @@ Private/Personal Use
 
 ---
 
-**Last Updated**: November 2, 2025
+**Last Updated**: November 3, 2025
 **Deployment Platform**: Fly.io
 **Current Version**: 0.1.0
+
+## Recent Changes (Nov 3, 2025)
+
+- ✅ Fixed login page "load failed" error (prerender config + VITE_API_URL setup)
+- ✅ Enabled landing page prerendering for better performance
+- ✅ Removed loading flash on page load
+- ✅ Updated local development ports (Postgres: 5433, Backend: 8083)
+- ✅ Added docker-compose.yml for easy local setup
+- ✅ Optimized production to 1 machine per service
+- ✅ Fixed all security issues from code review (admin-only registration, error handling, CORS)
