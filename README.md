@@ -40,25 +40,25 @@
 
 ### 1. Database Setup
 
-**Recommended: Using docker-compose**
+**Recommended: Using Docker Compose**
 
 The easiest way to set up PostgreSQL locally:
 
 ```bash
 # Start PostgreSQL (from project root)
-docker-compose up -d
+docker compose up -d
 
 # Verify it's running
 docker ps | grep wenxihuang-postgres-dev
 
 # View logs
-docker-compose logs postgres
+docker compose logs postgres
 
 # Stop when done
-docker-compose stop
+docker compose stop
 
 # Start again later
-docker-compose start
+docker compose start
 ```
 
 **Alternative: Using Docker directly**
