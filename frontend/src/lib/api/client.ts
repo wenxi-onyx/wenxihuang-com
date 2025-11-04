@@ -115,11 +115,75 @@ export interface CreateUserRequest {
     role: 'admin' | 'user';
 }
 
+export interface CreateEloConfigRequest {
+    version_name: string;
+    k_factor: number;
+    starting_elo: number;
+    description?: string;
+}
+
+export interface EloConfiguration {
+    id: string;
+    version_name: string;
+    k_factor: number;
+    starting_elo: number;
+    description: string | null;
+    is_active: boolean;
+    created_at: string;
+}
+
+export type JobStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+export interface Job {
+    id: string;
+    job_type: string;
+    status: JobStatus;
+    progress: number;
+    total_items: number | null;
+    processed_items: number;
+    result_data: any | null;
+    created_by: string | null;
+    created_at: string;
+    started_at: string | null;
+    completed_at: string | null;
+}
+
 export const adminApi = {
     async createUser(data: CreateUserRequest): Promise<{ message: string; user: User }> {
         return apiCall<{ message: string; user: User }>('/api/admin/users', {
             method: 'POST',
             body: JSON.stringify(data),
+        });
+    },
+
+    async createEloConfiguration(data: CreateEloConfigRequest): Promise<EloConfiguration> {
+        return apiCall<EloConfiguration>('/api/admin/elo-configurations', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async listEloConfigurations(): Promise<EloConfiguration[]> {
+        return apiCall<EloConfiguration[]>('/api/admin/elo-configurations', {
+            method: 'GET',
+        });
+    },
+
+    async activateEloConfiguration(versionName: string): Promise<{ message: string }> {
+        return apiCall<{ message: string }>(`/api/admin/elo-configurations/${versionName}/activate`, {
+            method: 'POST',
+        });
+    },
+
+    async recalculateElo(versionName: string): Promise<{ message: string; job_id: string; version: string }> {
+        return apiCall<{ message: string; job_id: string; version: string }>(`/api/admin/elo-configurations/${versionName}/recalculate`, {
+            method: 'POST',
+        });
+    },
+
+    async getJobStatus(jobId: string): Promise<Job> {
+        return apiCall<Job>(`/api/admin/jobs/${jobId}`, {
+            method: 'GET',
         });
     },
 };

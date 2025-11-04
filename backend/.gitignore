@@ -15,3 +15,5 @@ coverage/
 # IDE (in case not caught by root)
 .vscode/
 .idea/
+
+*.csv

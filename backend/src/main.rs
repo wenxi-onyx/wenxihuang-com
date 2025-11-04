@@ -83,6 +83,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Admin routes (admin users only)
     let admin_routes = Router::new()
         .route("/users", post(handlers::admin::create_user))
+        .route(
+            "/elo-configurations",
+            post(handlers::elo::create_elo_config),
+        )
+        .route("/elo-configurations", get(handlers::elo::list_elo_configs))
+        .route(
+            "/elo-configurations/{version_name}/activate",
+            post(handlers::elo::activate_elo_config),
+        )
+        .route(
+            "/elo-configurations/{version_name}/recalculate",
+            post(handlers::elo::recalculate_elo),
+        )
+        .route("/jobs/{job_id}", get(handlers::elo::get_job_status))
         .route_layer(axum::middleware::from_fn_with_state(
             pool.clone(),
             self::middleware::auth::require_admin,
