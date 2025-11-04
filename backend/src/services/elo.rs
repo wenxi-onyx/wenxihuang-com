@@ -3,11 +3,16 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+type EloConfigRow = (String, f64, f64, Option<f64>, Option<f64>, Option<i32>);
+
 #[derive(Debug, Clone)]
 pub struct EloConfig {
     pub version_name: String,
     pub k_factor: f64,
     pub starting_elo: f64,
+    pub base_k_factor: Option<f64>,
+    pub new_player_k_bonus: Option<f64>,
+    pub new_player_bonus_period: Option<i32>,
 }
 
 #[derive(Debug)]
@@ -18,6 +23,7 @@ struct Game {
     played_at: DateTime<chrono::Utc>,
 }
 
+#[allow(dead_code)]
 fn calculate_elo_change(winner_elo: f64, loser_elo: f64, k_factor: f64) -> (f64, f64) {
     let expected_winner = 1.0 / (1.0 + 10_f64.powf((loser_elo - winner_elo) / 400.0));
     let expected_loser = 1.0 - expected_winner;
@@ -26,6 +32,24 @@ fn calculate_elo_change(winner_elo: f64, loser_elo: f64, k_factor: f64) -> (f64,
     let loser_change = k_factor * (0.0 - expected_loser);
 
     (winner_change, loser_change)
+}
+
+/// Calculate dynamic K-factor based on player experience
+/// Formula: K = base_k + (new_player_k_bonus * e^(-games_played / bonus_period))
+fn calculate_dynamic_k_factor(config: &EloConfig, games_played: i32) -> f64 {
+    // If dynamic K-factor is not configured, use static k_factor
+    if let (Some(base_k), Some(bonus), Some(period)) = (
+        config.base_k_factor,
+        config.new_player_k_bonus,
+        config.new_player_bonus_period,
+    ) && period > 0
+    {
+        let decay = (-games_played as f64 / period as f64).exp();
+        return base_k + (bonus * decay);
+    }
+
+    // Fallback to static k_factor
+    config.k_factor
 }
 
 /// Recalculate all ELO ratings using the specified configuration
@@ -43,10 +67,12 @@ pub async fn recalculate_all_elo(
 
     tracing::info!("Found {} players", players.len());
 
-    // Initialize ELO for all players
+    // Initialize ELO and games played for all players
     let mut player_elos: HashMap<Uuid, f64> = HashMap::new();
+    let mut player_games_played: HashMap<Uuid, i32> = HashMap::new();
     for (player_id,) in players {
         player_elos.insert(player_id, config.starting_elo);
+        player_games_played.insert(player_id, 0);
     }
 
     // Get all games in chronological order
@@ -89,16 +115,35 @@ pub async fn recalculate_all_elo(
             .get(&game.player2_id)
             .ok_or_else(|| format!("Player {} not found in ELO map", game.player2_id))?;
 
-        // Calculate ELO changes
-        let (winner_change, loser_change) =
-            calculate_elo_change(winner_elo_before, loser_elo_before, config.k_factor);
+        // Get games played for each player
+        let winner_games = *player_games_played
+            .get(&game.player1_id)
+            .ok_or_else(|| format!("Player {} not found in games played map", game.player1_id))?;
+        let loser_games = *player_games_played
+            .get(&game.player2_id)
+            .ok_or_else(|| format!("Player {} not found in games played map", game.player2_id))?;
+
+        // Calculate dynamic K-factors for both players
+        let winner_k = calculate_dynamic_k_factor(config, winner_games);
+        let loser_k = calculate_dynamic_k_factor(config, loser_games);
+
+        // Calculate expected scores
+        let expected_winner =
+            1.0 / (1.0 + 10_f64.powf((loser_elo_before - winner_elo_before) / 400.0));
+        let expected_loser = 1.0 - expected_winner;
+
+        // Calculate ELO changes with player-specific K-factors
+        let winner_change = winner_k * (1.0 - expected_winner);
+        let loser_change = loser_k * (0.0 - expected_loser);
 
         let winner_elo_after = winner_elo_before + winner_change;
         let loser_elo_after = loser_elo_before + loser_change;
 
-        // Update in-memory ELO
+        // Update in-memory ELO and games played
         player_elos.insert(game.player1_id, winner_elo_after);
         player_elos.insert(game.player2_id, loser_elo_after);
+        player_games_played.insert(game.player1_id, winner_games + 1);
+        player_games_played.insert(game.player2_id, loser_games + 1);
 
         // Update game's ELO version
         sqlx::query("UPDATE games SET elo_version = $1 WHERE id = $2")
@@ -173,17 +218,30 @@ pub async fn recalculate_all_elo(
 /// Get the active ELO configuration
 #[allow(dead_code)]
 pub async fn get_active_config(pool: &PgPool) -> Result<Option<EloConfig>, sqlx::Error> {
-    let row: Option<(String, f64, f64)> = sqlx::query_as(
-        "SELECT version_name, k_factor, starting_elo FROM elo_configurations WHERE is_active = true"
+    let row: Option<EloConfigRow> = sqlx::query_as(
+        "SELECT version_name, k_factor, starting_elo, base_k_factor, new_player_k_bonus, new_player_bonus_period
+         FROM elo_configurations WHERE is_active = true"
     )
     .fetch_optional(pool)
     .await?;
 
-    Ok(row.map(|(version_name, k_factor, starting_elo)| EloConfig {
-        version_name,
-        k_factor,
-        starting_elo,
-    }))
+    Ok(row.map(
+        |(
+            version_name,
+            k_factor,
+            starting_elo,
+            base_k_factor,
+            new_player_k_bonus,
+            new_player_bonus_period,
+        )| EloConfig {
+            version_name,
+            k_factor,
+            starting_elo,
+            base_k_factor,
+            new_player_k_bonus,
+            new_player_bonus_period,
+        },
+    ))
 }
 
 /// Get ELO configuration by version name
@@ -191,16 +249,29 @@ pub async fn get_config_by_version(
     pool: &PgPool,
     version: &str,
 ) -> Result<Option<EloConfig>, sqlx::Error> {
-    let row: Option<(String, f64, f64)> = sqlx::query_as(
-        "SELECT version_name, k_factor, starting_elo FROM elo_configurations WHERE version_name = $1"
+    let row: Option<EloConfigRow> = sqlx::query_as(
+        "SELECT version_name, k_factor, starting_elo, base_k_factor, new_player_k_bonus, new_player_bonus_period
+         FROM elo_configurations WHERE version_name = $1"
     )
     .bind(version)
     .fetch_optional(pool)
     .await?;
 
-    Ok(row.map(|(version_name, k_factor, starting_elo)| EloConfig {
-        version_name,
-        k_factor,
-        starting_elo,
-    }))
+    Ok(row.map(
+        |(
+            version_name,
+            k_factor,
+            starting_elo,
+            base_k_factor,
+            new_player_k_bonus,
+            new_player_bonus_period,
+        )| EloConfig {
+            version_name,
+            k_factor,
+            starting_elo,
+            base_k_factor,
+            new_player_k_bonus,
+            new_player_bonus_period,
+        },
+    ))
 }

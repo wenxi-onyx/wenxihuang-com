@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use tower_cookies::CookieManagerLayer;
+use tower_http::trace::TraceLayer;
 
 mod error;
 mod handlers;
@@ -18,8 +19,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load environment variables
     dotenvy::dotenv().ok();
 
-    // Initialize tracing
-    tracing_subscriber::fmt::init();
+    // Initialize tracing with better visibility
+    tracing_subscriber::fmt()
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_level(true)
+        .with_line_number(true)
+        .with_file(false)
+        .compact()
+        .init();
+
+    tracing::info!("=== wenxihuang.com Backend Starting ===");
 
     // Validate required environment variables
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -44,6 +54,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })?;
 
     tracing::info!("Database connection pool created successfully");
+
+    tracing::info!("Setting up routes...");
 
     // Auth routes
     let auth_routes = Router::new()
@@ -102,6 +114,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             self::middleware::auth::require_admin,
         ));
 
+    tracing::info!("Routes configured successfully");
+
     // Build our application with routes
     let app = Router::new()
         .route("/", get(root))
@@ -110,8 +124,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/api/user", user_routes)
         .nest("/api/admin", admin_routes)
         .with_state(pool)
+        .layer(TraceLayer::new_for_http())
         .layer(CookieManagerLayer::new())
         .layer(self::middleware::cors::cors_layer());
+
+    tracing::info!("Application layers configured");
 
     // Get port from environment or use default
     let port = std::env::var("PORT")
@@ -120,14 +137,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(8080);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    tracing::info!("Starting server on {}", addr);
+    tracing::info!("🚀 Starting server on http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| {
-        tracing::error!("Failed to bind to {}: {}", addr, e);
+        tracing::error!("❌ Failed to bind to {}: {}", addr, e);
         e
     })?;
 
-    tracing::info!("Server listening on {}", addr);
+    tracing::info!("✓ Server listening on http://{}", addr);
+    tracing::info!("✓ Health check available at http://{}/health", addr);
+    tracing::info!("✓ API available at http://{}/api", addr);
 
     axum::serve(listener, app).await.map_err(|e| {
         tracing::error!("Server error: {}", e);

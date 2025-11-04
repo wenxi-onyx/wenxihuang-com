@@ -27,7 +27,32 @@ struct Player {
 }
 
 fn parse_player_name(name: &str) -> (String, String) {
-    // Parse names like "W Huang", "Y Sun", "R Bhagat"
+    // Name mapping from abbreviated to full names
+    let name_map: HashMap<&str, (&str, &str)> = [
+        ("Y Sun", ("Yuhong", "Sun")),
+        ("C Weaver", ("Chris", "Weaver")),
+        ("W Huang", ("Wenxi", "Huang")),
+        ("T Muhn", ("Thomas", "Muhn")),
+        ("J Rahmfeld", ("Joachim", "Rahmfeld")),
+        ("R Meguro", ("Rei", "Meguro")),
+        ("J Tahara", ("Justin", "Tahara")),
+        ("E Lohn", ("Evan", "Lohn")),
+        ("R Bhagat", ("Raunak", "Bhagat")),
+        ("R Guan", ("Richard", "Guan")),
+        ("N Garza", ("Nik", "Garza")),
+        ("M Veber", ("Matt", "Veber")),
+        ("D Chaudhari", ("Dhruv", "Chaudhari")),
+    ]
+    .iter()
+    .copied()
+    .collect();
+
+    // Check if we have a mapping for this abbreviated name
+    if let Some((first, last)) = name_map.get(name.trim()) {
+        return (first.to_string(), last.to_string());
+    }
+
+    // Fallback: parse as "FirstInitial LastName"
     let parts: Vec<&str> = name.split_whitespace().collect();
     if parts.len() >= 2 {
         let first_name = parts[0].to_string();
