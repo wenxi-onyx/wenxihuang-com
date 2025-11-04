@@ -44,6 +44,13 @@
         }
     }
 
+    function handleProfileFormKeydown(e: KeyboardEvent) {
+        // Only allow Enter to submit if focus is on the last input (lastName)
+        if (e.key === 'Enter' && (e.target as HTMLElement).id !== 'lastName') {
+            e.preventDefault();
+        }
+    }
+
     async function handleProfileUpdate(e: Event) {
         e.preventDefault();
 
@@ -71,6 +78,13 @@
             showToast(error instanceof Error ? error.message : 'Failed to update profile', 'error');
         } finally {
             profileLoading = false;
+        }
+    }
+
+    function handlePasswordFormKeydown(e: KeyboardEvent) {
+        // Only allow Enter to submit if focus is on the last input (confirmPassword)
+        if (e.key === 'Enter' && (e.target as HTMLElement).id !== 'confirmPassword') {
+            e.preventDefault();
         }
     }
 
@@ -130,7 +144,7 @@
         <section class="settings-section">
             <h2 class="section-title">PROFILE INFORMATION</h2>
 
-            <form onsubmit={handleProfileUpdate}>
+            <form onsubmit={handleProfileUpdate} onkeydown={handleProfileFormKeydown}>
                 <div class="form-group">
                     <label for="username">USERNAME</label>
                     <input
@@ -183,7 +197,7 @@
         <section class="settings-section">
             <h2 class="section-title">CHANGE PASSWORD</h2>
 
-            <form onsubmit={handlePasswordChange}>
+            <form onsubmit={handlePasswordChange} onkeydown={handlePasswordFormKeydown}>
                 <div class="form-group">
                     <label for="currentPassword">CURRENT PASSWORD</label>
                     <input
@@ -360,6 +374,7 @@
     input {
         padding: 0.75rem 1rem;
         font-size: 1rem;
+        line-height: 1.5;
         font-family: inherit;
         background: transparent;
         color: var(--text-primary);

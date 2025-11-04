@@ -301,6 +301,7 @@
     input[type="password"] {
         padding: 0.75rem 1rem;
         font-size: 1rem;
+        line-height: 1.5;
         font-family: inherit;
         background: transparent;
         color: var(--text-primary);
