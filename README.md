@@ -288,7 +288,7 @@ flyctl ssh console -a wenxihuang-db
 
 Migrations are located in `backend/migrations/` and follow the naming pattern:
 - `001_create_users_and_sessions.sql`
-- `002_create_ping_pong_tables.sql`
+- `002_create_table_tennis_tables.sql`
 
 #### Manual Migration Execution
 

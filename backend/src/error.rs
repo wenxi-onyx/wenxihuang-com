@@ -6,7 +6,6 @@ use axum::{
 use serde_json::json;
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum AuthError {
     InvalidCredentials,
     Unauthorized,
@@ -15,22 +14,37 @@ pub enum AuthError {
     DatabaseError,
     HashingError,
     UsernameAlreadyExists,
+    InvalidInput(String),
 }
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
-            AuthError::InvalidCredentials => {
-                (StatusCode::UNAUTHORIZED, "Invalid username or password")
+            AuthError::InvalidCredentials => (
+                StatusCode::UNAUTHORIZED,
+                "Invalid username or password".to_string(),
+            ),
+            AuthError::Unauthorized => (
+                StatusCode::UNAUTHORIZED,
+                "Authentication required".to_string(),
+            ),
+            AuthError::Forbidden => (
+                StatusCode::FORBIDDEN,
+                "Insufficient permissions".to_string(),
+            ),
+            AuthError::SessionExpired => (StatusCode::UNAUTHORIZED, "Session expired".to_string()),
+            AuthError::DatabaseError => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Database error".to_string(),
+            ),
+            AuthError::HashingError => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Password hashing error".to_string(),
+            ),
+            AuthError::UsernameAlreadyExists => {
+                (StatusCode::CONFLICT, "Username already taken".to_string())
             }
-            AuthError::Unauthorized => (StatusCode::UNAUTHORIZED, "Authentication required"),
-            AuthError::Forbidden => (StatusCode::FORBIDDEN, "Insufficient permissions"),
-            AuthError::SessionExpired => (StatusCode::UNAUTHORIZED, "Session expired"),
-            AuthError::DatabaseError => (StatusCode::INTERNAL_SERVER_ERROR, "Database error"),
-            AuthError::HashingError => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "Password hashing error")
-            }
-            AuthError::UsernameAlreadyExists => (StatusCode::CONFLICT, "Username already taken"),
+            AuthError::InvalidInput(msg) => (StatusCode::BAD_REQUEST, msg),
         };
 
         let body = Json(json!({

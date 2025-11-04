@@ -7,6 +7,8 @@ pub struct User {
     pub id: Uuid,
     pub username: String,
     pub password_hash: String,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
     pub role: UserRole,
     #[allow(dead_code)]
     pub created_at: DateTime<Utc>,
@@ -14,6 +16,7 @@ pub struct User {
 
 #[derive(Debug, Clone, sqlx::Type, serde::Serialize, serde::Deserialize)]
 #[sqlx(type_name = "user_role", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum UserRole {
     Admin,
     User,
@@ -22,7 +25,7 @@ pub enum UserRole {
 impl User {
     pub async fn find_by_username(pool: &PgPool, username: &str) -> Result<User, sqlx::Error> {
         sqlx::query_as::<_, User>(
-            "SELECT id, username, password_hash, role, created_at FROM users WHERE username = $1",
+            "SELECT id, username, password_hash, first_name, last_name, role, created_at FROM users WHERE username = $1",
         )
         .bind(username)
         .fetch_one(pool)
@@ -31,7 +34,7 @@ impl User {
 
     pub async fn find_by_id(pool: &PgPool, id: Uuid) -> Result<User, sqlx::Error> {
         sqlx::query_as::<_, User>(
-            "SELECT id, username, password_hash, role, created_at FROM users WHERE id = $1",
+            "SELECT id, username, password_hash, first_name, last_name, role, created_at FROM users WHERE id = $1",
         )
         .bind(id)
         .fetch_one(pool)
@@ -42,21 +45,24 @@ impl User {
         pool: &PgPool,
         username: &str,
         password_hash: &str,
+        first_name: Option<&str>,
+        last_name: Option<&str>,
         role: UserRole,
     ) -> Result<User, sqlx::Error> {
         sqlx::query_as::<_, User>(
-            "INSERT INTO users (username, password_hash, role)
-             VALUES ($1, $2, $3)
-             RETURNING id, username, password_hash, role, created_at",
+            "INSERT INTO users (username, password_hash, first_name, last_name, role)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id, username, password_hash, first_name, last_name, role, created_at",
         )
         .bind(username)
         .bind(password_hash)
+        .bind(first_name)
+        .bind(last_name)
         .bind(role)
         .fetch_one(pool)
         .await
     }
 
-    #[allow(dead_code)]
     pub async fn update_password(
         pool: &PgPool,
         user_id: Uuid,
@@ -68,5 +74,24 @@ impl User {
             .execute(pool)
             .await?;
         Ok(())
+    }
+
+    pub async fn update_profile(
+        pool: &PgPool,
+        user_id: Uuid,
+        username: &str,
+        first_name: Option<&str>,
+        last_name: Option<&str>,
+    ) -> Result<User, sqlx::Error> {
+        sqlx::query_as::<_, User>(
+            "UPDATE users SET username = $1, first_name = $2, last_name = $3 WHERE id = $4
+             RETURNING id, username, password_hash, first_name, last_name, role, created_at",
+        )
+        .bind(username)
+        .bind(first_name)
+        .bind(last_name)
+        .bind(user_id)
+        .fetch_one(pool)
+        .await
     }
 }

@@ -31,6 +31,8 @@ pub struct AuthResponse {
 pub struct UserInfo {
     pub id: uuid::Uuid,
     pub username: String,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
     pub role: UserRole,
 }
 
@@ -39,6 +41,8 @@ impl From<User> for UserInfo {
         UserInfo {
             id: user.id,
             username: user.username,
+            first_name: user.first_name,
+            last_name: user.last_name,
             role: user.role,
         }
     }
@@ -135,7 +139,7 @@ pub async fn register(
     let password_hash = hash_password(&req.password)?;
 
     // Create user
-    let user = User::create(&pool, &req.username, &password_hash, req.role)
+    let user = User::create(&pool, &req.username, &password_hash, None, None, req.role)
         .await
         .map_err(|_| AuthError::DatabaseError)?;
 

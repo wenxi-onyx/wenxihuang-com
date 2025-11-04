@@ -31,7 +31,6 @@ pub async fn require_auth(
 }
 
 /// Middleware to require admin role
-#[allow(dead_code)]
 pub async fn require_admin(
     State(pool): State<PgPool>,
     cookies: Cookies,

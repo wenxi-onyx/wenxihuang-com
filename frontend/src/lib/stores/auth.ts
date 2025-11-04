@@ -45,12 +45,12 @@ function createAuthStore() {
             try {
                 await authApi.logout();
                 set({ user: null, loading: false });
-                goto('/login');
+                goto('/');
             } catch (error) {
                 console.error('Logout failed:', error);
                 // Clear user anyway
                 set({ user: null, loading: false });
-                goto('/login');
+                goto('/');
             }
         },
 
@@ -64,6 +64,10 @@ function createAuthStore() {
                     error: error instanceof Error ? error.message : 'Registration failed'
                 };
             }
+        },
+
+        updateUser(user: User) {
+            update((state) => ({ ...state, user }));
         },
     };
 }

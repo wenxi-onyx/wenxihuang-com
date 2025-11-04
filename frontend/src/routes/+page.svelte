@@ -17,7 +17,7 @@
 				<FeatureCard title="WIP" status="inactive" delay="0.5s" />
 			</div>
 			<div class="card-wrapper card-2">
-				<FeatureCard title="PING PONG" status="active" href="/ping-pong" delay="0.3s" />
+				<FeatureCard title="TABLE TENNIS DATABASE" status="active" href="/table-tennis" delay="0.3s" />
 			</div>
 			<div class="card-wrapper card-3">
 				<FeatureCard title="MULTIPLAYER CHATGPT" status="inactive" delay="0.7s" />
@@ -84,7 +84,7 @@
 			width: 100%;
 		}
 
-		/* Reorder cards on mobile: Ping Pong first */
+		/* Reorder cards on mobile: Table Tennis first */
 		.card-2 {
 			order: 1;
 		}

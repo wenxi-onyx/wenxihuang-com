@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    routing::{get, post},
+    routing::{get, post, put},
 };
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
@@ -70,11 +70,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )),
         );
 
+    // User routes (authenticated users)
+    let user_routes = Router::new()
+        .route("/profile", get(handlers::user::get_profile))
+        .route("/profile", put(handlers::user::update_profile))
+        .route("/change-password", post(handlers::user::change_password))
+        .route_layer(axum::middleware::from_fn_with_state(
+            pool.clone(),
+            self::middleware::auth::require_auth,
+        ));
+
+    // Admin routes (admin users only)
+    let admin_routes = Router::new()
+        .route("/users", post(handlers::admin::create_user))
+        .route_layer(axum::middleware::from_fn_with_state(
+            pool.clone(),
+            self::middleware::auth::require_admin,
+        ));
+
     // Build our application with routes
     let app = Router::new()
         .route("/", get(root))
         .route("/health", get(health))
         .nest("/api/auth", auth_routes)
+        .nest("/api/user", user_routes)
+        .nest("/api/admin", admin_routes)
         .with_state(pool)
         .layer(CookieManagerLayer::new())
         .layer(self::middleware::cors::cors_layer());
