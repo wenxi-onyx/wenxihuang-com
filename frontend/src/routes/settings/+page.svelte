@@ -92,8 +92,8 @@
         e.preventDefault();
 
         // Validation
-        if (newPassword.length < 8) {
-            showToast('Password must be at least 8 characters', 'error');
+        if (newPassword.length < 6) {
+            showToast('Password must be at least 6 characters', 'error');
             return;
         }
 
@@ -155,10 +155,8 @@
                         minlength="3"
                         maxlength="20"
                         pattern="[a-zA-Z0-9_-]+"
-                        placeholder="Enter your username"
                         title="Username must contain only letters, numbers, underscores, and hyphens"
                     />
-                    <p class="hint">3-20 characters (letters, numbers, _ and - only)</p>
                 </div>
 
                 <div class="form-group">
@@ -168,7 +166,6 @@
                         id="firstName"
                         bind:value={firstName}
                         maxlength="50"
-                        placeholder="Enter your first name"
                     />
                 </div>
 
@@ -179,7 +176,6 @@
                         id="lastName"
                         bind:value={lastName}
                         maxlength="50"
-                        placeholder="Enter your last name"
                     />
                 </div>
 
@@ -215,9 +211,8 @@
                         id="newPassword"
                         bind:value={newPassword}
                         required
-                        minlength="8"
+                        minlength="6"
                     />
-                    <p class="hint">Minimum 8 characters</p>
                 </div>
 
                 <div class="form-group">

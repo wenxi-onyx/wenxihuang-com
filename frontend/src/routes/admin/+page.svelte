@@ -90,7 +90,6 @@
                         minlength="3"
                         maxlength="20"
                         pattern="[a-zA-Z0-9_-]+"
-                        placeholder="Enter username (3-20 characters, letters/numbers/_ and - only)"
                         title="Username must contain only letters, numbers, underscores, and hyphens"
                         required
                     />
@@ -103,7 +102,6 @@
                         id="firstName"
                         bind:value={firstName}
                         maxlength="50"
-                        placeholder="Enter first name (optional)"
                     />
                 </div>
 
@@ -114,7 +112,6 @@
                         id="lastName"
                         bind:value={lastName}
                         maxlength="50"
-                        placeholder="Enter last name (optional)"
                     />
                 </div>
 
@@ -124,8 +121,7 @@
                         type="password"
                         id="password"
                         bind:value={password}
-                        minlength="8"
-                        placeholder="Enter password (min 8 characters)"
+                        minlength="6"
                         required
                     />
                 </div>
@@ -136,7 +132,6 @@
                         type="password"
                         id="confirmPassword"
                         bind:value={confirmPassword}
-                        placeholder="Confirm password"
                         required
                     />
                 </div>

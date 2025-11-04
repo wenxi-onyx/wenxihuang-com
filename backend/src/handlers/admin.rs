@@ -31,9 +31,9 @@ pub async fn create_user(
     }
 
     // Validate password length
-    if req.password.len() < 8 {
+    if req.password.len() < 6 {
         return Err(AuthError::InvalidInput(
-            "Password must be at least 8 characters".to_string(),
+            "Password must be at least 6 characters".to_string(),
         ));
     }
 

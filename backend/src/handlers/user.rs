@@ -104,9 +104,9 @@ pub async fn change_password(
     verify_password(&req.current_password, &user.password_hash)?;
 
     // Validate new password
-    if req.new_password.len() < 8 {
+    if req.new_password.len() < 6 {
         return Err(AuthError::InvalidInput(
-            "Password must be at least 8 characters".to_string(),
+            "Password must be at least 6 characters".to_string(),
         ));
     }
 
