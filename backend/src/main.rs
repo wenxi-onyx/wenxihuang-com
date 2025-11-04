@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
 };
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
@@ -101,6 +101,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route("/elo-configurations", get(handlers::elo::list_elo_configs))
         .route(
+            "/elo-configurations/{version_name}",
+            put(handlers::elo::update_elo_config),
+        )
+        .route(
+            "/elo-configurations/{version_name}",
+            delete(handlers::elo::delete_elo_config),
+        )
+        .route(
             "/elo-configurations/{version_name}/activate",
             post(handlers::elo::activate_elo_config),
         )
@@ -109,10 +117,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             post(handlers::elo::recalculate_elo),
         )
         .route("/jobs/{job_id}", get(handlers::elo::get_job_status))
+        .route(
+            "/players/{player_id}/toggle-active",
+            post(handlers::players::toggle_player_active),
+        )
         .route_layer(axum::middleware::from_fn_with_state(
             pool.clone(),
             self::middleware::auth::require_admin,
         ));
+
+    // Public routes (no auth required)
+    let public_routes = Router::new()
+        .route("/players", get(handlers::players::list_players))
+        .route(
+            "/players/{player_id}/history",
+            get(handlers::players::get_player_history),
+        );
 
     tracing::info!("Routes configured successfully");
 
@@ -123,6 +143,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/api/auth", auth_routes)
         .nest("/api/user", user_routes)
         .nest("/api/admin", admin_routes)
+        .nest("/api", public_routes)
         .with_state(pool)
         .layer(TraceLayer::new_for_http())
         .layer(CookieManagerLayer::new())

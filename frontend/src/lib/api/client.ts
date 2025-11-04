@@ -1,6 +1,6 @@
 // API client for the backend
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8083';
 
 export interface User {
     id: string;
@@ -119,6 +119,18 @@ export interface CreateEloConfigRequest {
     version_name: string;
     k_factor: number;
     starting_elo: number;
+    base_k_factor?: number;
+    new_player_k_bonus?: number;
+    new_player_bonus_period?: number;
+    description?: string;
+}
+
+export interface UpdateEloConfigRequest {
+    k_factor?: number;
+    starting_elo?: number;
+    base_k_factor?: number;
+    new_player_k_bonus?: number;
+    new_player_bonus_period?: number;
     description?: string;
 }
 
@@ -127,6 +139,9 @@ export interface EloConfiguration {
     version_name: string;
     k_factor: number;
     starting_elo: number;
+    base_k_factor: number | null;
+    new_player_k_bonus: number | null;
+    new_player_bonus_period: number | null;
     description: string | null;
     is_active: boolean;
     created_at: string;
@@ -146,6 +161,29 @@ export interface Job {
     created_at: string;
     started_at: string | null;
     completed_at: string | null;
+}
+
+export interface Player {
+    id: string;
+    name: string;
+    current_elo: number;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface PlayerWithStats extends Player {
+    games_played: number;
+    wins: number;
+    losses: number;
+}
+
+export interface EloHistoryPoint {
+    game_id: string;
+    elo_before: number;
+    elo_after: number;
+    elo_version: string;
+    created_at: string;
 }
 
 export const adminApi = {
@@ -183,6 +221,40 @@ export const adminApi = {
 
     async getJobStatus(jobId: string): Promise<Job> {
         return apiCall<Job>(`/api/admin/jobs/${jobId}`, {
+            method: 'GET',
+        });
+    },
+
+    async updateEloConfiguration(versionName: string, data: UpdateEloConfigRequest): Promise<EloConfiguration> {
+        return apiCall<EloConfiguration>(`/api/admin/elo-configurations/${versionName}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async deleteEloConfiguration(versionName: string): Promise<{ message: string }> {
+        return apiCall<{ message: string }>(`/api/admin/elo-configurations/${versionName}`, {
+            method: 'DELETE',
+        });
+    },
+
+    async togglePlayerActive(playerId: string): Promise<Player> {
+        return apiCall<Player>(`/api/admin/players/${playerId}/toggle-active`, {
+            method: 'POST',
+        });
+    },
+};
+
+// Public Players API methods
+export const playersApi = {
+    async listPlayers(): Promise<PlayerWithStats[]> {
+        return apiCall<PlayerWithStats[]>('/api/players', {
+            method: 'GET',
+        });
+    },
+
+    async getPlayerHistory(playerId: string): Promise<EloHistoryPoint[]> {
+        return apiCall<EloHistoryPoint[]>(`/api/players/${playerId}/history`, {
             method: 'GET',
         });
     },

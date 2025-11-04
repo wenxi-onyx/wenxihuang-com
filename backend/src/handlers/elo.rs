@@ -20,6 +20,9 @@ pub struct CreateEloConfigRequest {
     pub version_name: String,
     pub k_factor: f64,
     pub starting_elo: f64,
+    pub base_k_factor: Option<f64>,
+    pub new_player_k_bonus: Option<f64>,
+    pub new_player_bonus_period: Option<i32>,
     pub description: Option<String>,
 }
 
@@ -29,6 +32,9 @@ pub struct EloConfigResponse {
     pub version_name: String,
     pub k_factor: f64,
     pub starting_elo: f64,
+    pub base_k_factor: Option<f64>,
+    pub new_player_k_bonus: Option<f64>,
+    pub new_player_bonus_period: Option<i32>,
     pub description: Option<String>,
     pub is_active: bool,
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -74,6 +80,33 @@ pub async fn create_elo_config(
         )));
     }
 
+    // Validate dynamic K-factor fields
+    if let Some(base_k) = req.base_k_factor
+        && !(MIN_K_FACTOR..=MAX_K_FACTOR).contains(&base_k)
+    {
+        return Err(AuthError::InvalidInput(format!(
+            "Base K-factor must be between {} and {}",
+            MIN_K_FACTOR, MAX_K_FACTOR
+        )));
+    }
+
+    if let Some(bonus) = req.new_player_k_bonus
+        && !(0.0..=MAX_K_FACTOR).contains(&bonus)
+    {
+        return Err(AuthError::InvalidInput(format!(
+            "New player K bonus must be between 0 and {}",
+            MAX_K_FACTOR
+        )));
+    }
+
+    if let Some(period) = req.new_player_bonus_period
+        && period <= 0
+    {
+        return Err(AuthError::InvalidInput(
+            "New player bonus period must be positive".to_string(),
+        ));
+    }
+
     // Check if version name already exists
     let exists: Option<(uuid::Uuid,)> =
         sqlx::query_as("SELECT id FROM elo_configurations WHERE version_name = $1")
@@ -93,13 +126,20 @@ pub async fn create_elo_config(
 
     // Create configuration
     let config: EloConfigResponse = sqlx::query_as(
-        "INSERT INTO elo_configurations (version_name, k_factor, starting_elo, description, created_by)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, version_name, k_factor, starting_elo, description, is_active, created_at"
+        "INSERT INTO elo_configurations
+         (version_name, k_factor, starting_elo, base_k_factor,
+          new_player_k_bonus, new_player_bonus_period, description, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, version_name, k_factor, starting_elo, base_k_factor,
+                   new_player_k_bonus, new_player_bonus_period, description,
+                   is_active, created_at",
     )
     .bind(&req.version_name)
     .bind(req.k_factor)
     .bind(req.starting_elo)
+    .bind(req.base_k_factor)
+    .bind(req.new_player_k_bonus)
+    .bind(req.new_player_bonus_period)
     .bind(&req.description)
     .bind(admin_user.id)
     .fetch_one(&pool)
@@ -117,7 +157,9 @@ pub async fn list_elo_configs(
     State(pool): State<PgPool>,
 ) -> Result<Json<Vec<EloConfigResponse>>, AuthError> {
     let configs: Vec<EloConfigResponse> = sqlx::query_as(
-        "SELECT id, version_name, k_factor, starting_elo, description, is_active, created_at
+        "SELECT id, version_name, k_factor, starting_elo, base_k_factor,
+                new_player_k_bonus, new_player_bonus_period, description,
+                is_active, created_at
          FROM elo_configurations
          ORDER BY created_at DESC",
     )
@@ -185,6 +227,168 @@ pub async fn activate_elo_config(
 
     Ok(Json(serde_json::json!({
         "message": format!("Configuration '{}' activated", version_name)
+    })))
+}
+
+/// Update an ELO configuration (admin only)
+pub async fn update_elo_config(
+    State(pool): State<PgPool>,
+    Extension(_admin_user): Extension<User>,
+    axum::extract::Path(version_name): axum::extract::Path<String>,
+    Json(req): Json<CreateEloConfigRequest>,
+) -> Result<Json<EloConfigResponse>, AuthError> {
+    // Validate inputs (same as create)
+    if req.k_factor < MIN_K_FACTOR || req.k_factor > MAX_K_FACTOR {
+        return Err(AuthError::InvalidInput(format!(
+            "K-factor must be between {} and {}",
+            MIN_K_FACTOR, MAX_K_FACTOR
+        )));
+    }
+
+    if req.starting_elo < MIN_STARTING_ELO || req.starting_elo > MAX_STARTING_ELO {
+        return Err(AuthError::InvalidInput(format!(
+            "Starting ELO must be between {} and {}",
+            MIN_STARTING_ELO, MAX_STARTING_ELO
+        )));
+    }
+
+    if let Some(ref desc) = req.description
+        && desc.len() > MAX_DESCRIPTION_LENGTH
+    {
+        return Err(AuthError::InvalidInput(format!(
+            "Description must be {} characters or less",
+            MAX_DESCRIPTION_LENGTH
+        )));
+    }
+
+    if let Some(base_k) = req.base_k_factor
+        && !(MIN_K_FACTOR..=MAX_K_FACTOR).contains(&base_k)
+    {
+        return Err(AuthError::InvalidInput(format!(
+            "Base K-factor must be between {} and {}",
+            MIN_K_FACTOR, MAX_K_FACTOR
+        )));
+    }
+
+    if let Some(bonus) = req.new_player_k_bonus
+        && !(0.0..=MAX_K_FACTOR).contains(&bonus)
+    {
+        return Err(AuthError::InvalidInput(format!(
+            "New player K bonus must be between 0 and {}",
+            MAX_K_FACTOR
+        )));
+    }
+
+    if let Some(period) = req.new_player_bonus_period
+        && period <= 0
+    {
+        return Err(AuthError::InvalidInput(
+            "New player bonus period must be positive".to_string(),
+        ));
+    }
+
+    // Check if config exists
+    let exists: Option<(uuid::Uuid,)> =
+        sqlx::query_as("SELECT id FROM elo_configurations WHERE version_name = $1")
+            .bind(&version_name)
+            .fetch_optional(&pool)
+            .await
+            .map_err(|e| {
+                tracing::error!("Database error checking configuration: {}", e);
+                AuthError::DatabaseError
+            })?;
+
+    if exists.is_none() {
+        return Err(AuthError::InvalidInput(
+            "Configuration not found".to_string(),
+        ));
+    }
+
+    // Cannot update active configuration
+    let is_active: Option<(bool,)> =
+        sqlx::query_as("SELECT is_active FROM elo_configurations WHERE version_name = $1")
+            .bind(&version_name)
+            .fetch_optional(&pool)
+            .await
+            .map_err(|e| {
+                tracing::error!("Database error checking active status: {}", e);
+                AuthError::DatabaseError
+            })?;
+
+    if let Some((true,)) = is_active {
+        return Err(AuthError::InvalidInput(
+            "Cannot update active configuration. Deactivate it first.".to_string(),
+        ));
+    }
+
+    // Update configuration
+    let config: EloConfigResponse = sqlx::query_as(
+        "UPDATE elo_configurations
+         SET k_factor = $2, starting_elo = $3, base_k_factor = $4,
+             new_player_k_bonus = $5, new_player_bonus_period = $6,
+             description = $7
+         WHERE version_name = $1
+         RETURNING id, version_name, k_factor, starting_elo, base_k_factor,
+                   new_player_k_bonus, new_player_bonus_period, description,
+                   is_active, created_at",
+    )
+    .bind(&version_name)
+    .bind(req.k_factor)
+    .bind(req.starting_elo)
+    .bind(req.base_k_factor)
+    .bind(req.new_player_k_bonus)
+    .bind(req.new_player_bonus_period)
+    .bind(&req.description)
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| {
+        tracing::error!("Database error updating ELO configuration: {}", e);
+        AuthError::DatabaseError
+    })?;
+
+    Ok(Json(config))
+}
+
+/// Delete an ELO configuration (admin only)
+pub async fn delete_elo_config(
+    State(pool): State<PgPool>,
+    axum::extract::Path(version_name): axum::extract::Path<String>,
+) -> Result<Json<serde_json::Value>, AuthError> {
+    // Check if config is active
+    let is_active: Option<(bool,)> =
+        sqlx::query_as("SELECT is_active FROM elo_configurations WHERE version_name = $1")
+            .bind(&version_name)
+            .fetch_optional(&pool)
+            .await
+            .map_err(|e| {
+                tracing::error!("Database error checking active status: {}", e);
+                AuthError::DatabaseError
+            })?;
+
+    if let Some((true,)) = is_active {
+        return Err(AuthError::InvalidInput(
+            "Cannot delete active configuration. Deactivate it first.".to_string(),
+        ));
+    }
+
+    // Delete configuration
+    let result = sqlx::query("DELETE FROM elo_configurations WHERE version_name = $1")
+        .bind(&version_name)
+        .execute(&pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error deleting configuration: {}", e);
+            AuthError::DatabaseError
+        })?;
+
+    if result.rows_affected() == 0 {
+        return Err(AuthError::InvalidInput(
+            "Configuration not found".to_string(),
+        ));
+    }
+
+    Ok(Json(serde_json::json!({
+        "message": format!("Configuration '{}' deleted", version_name)
     })))
 }
 
