@@ -70,9 +70,15 @@ pub async fn login(
     // Create secure cookie (30 days)
     let mut cookie = Cookie::new("session_id", session_id);
     cookie.set_http_only(true);
-    // Only require HTTPS in production
-    cookie.set_secure(cfg!(not(debug_assertions)));
-    cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
+    // In production, use secure cookies with SameSite::None for cross-origin requests
+    // In development, use less strict settings for localhost
+    if cfg!(debug_assertions) {
+        cookie.set_secure(false);
+        cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
+    } else {
+        cookie.set_secure(true);
+        cookie.set_same_site(tower_cookies::cookie::SameSite::None);
+    }
     cookie.set_max_age(Duration::days(30));
     cookie.set_path("/");
 
@@ -94,12 +100,16 @@ pub async fn logout(
         delete_session(&pool, session_id).await?;
     }
 
-    // Remove cookie
+    // Remove cookie (must match the settings used when creating it)
     let mut cookie = Cookie::new("session_id", "");
     cookie.set_http_only(true);
-    // Only require HTTPS in production
-    cookie.set_secure(cfg!(not(debug_assertions)));
-    cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
+    if cfg!(debug_assertions) {
+        cookie.set_secure(false);
+        cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
+    } else {
+        cookie.set_secure(true);
+        cookie.set_same_site(tower_cookies::cookie::SameSite::None);
+    }
     cookie.set_max_age(Duration::ZERO);
     cookie.set_path("/");
 
