@@ -23,53 +23,6 @@ struct Game {
     played_at: DateTime<chrono::Utc>,
 }
 
-/// K-factor configuration parameters
-#[derive(Debug, Clone)]
-pub struct KFactorConfig {
-    pub k_factor: f64,
-    pub base_k_factor: Option<f64>,
-    pub new_player_k_bonus: Option<f64>,
-    pub new_player_bonus_period: Option<i32>,
-}
-
-/// Calculate ELO change for two players based on match result
-/// Returns (player1_elo_change, player2_elo_change)
-pub fn calculate_elo_change(
-    player1_elo: f64,
-    player2_elo: f64,
-    player1_won: bool,
-    k_config: &KFactorConfig,
-    player1_games_played: i32,
-    player2_games_played: i32,
-) -> (f64, f64) {
-    // Create a temporary config for K-factor calculation
-    let temp_config = EloConfig {
-        version_name: "temp".to_string(),
-        k_factor: k_config.k_factor,
-        starting_elo: 1000.0,
-        base_k_factor: k_config.base_k_factor,
-        new_player_k_bonus: k_config.new_player_k_bonus,
-        new_player_bonus_period: k_config.new_player_bonus_period,
-    };
-
-    // Calculate dynamic K-factors for both players
-    let player1_k = calculate_dynamic_k_factor(&temp_config, player1_games_played);
-    let player2_k = calculate_dynamic_k_factor(&temp_config, player2_games_played);
-
-    // Calculate expected scores
-    let expected_player1 = 1.0 / (1.0 + 10_f64.powf((player2_elo - player1_elo) / 400.0));
-    let expected_player2 = 1.0 - expected_player1;
-
-    // Calculate actual scores
-    let (player1_score, player2_score) = if player1_won { (1.0, 0.0) } else { (0.0, 1.0) };
-
-    // Calculate ELO changes with player-specific K-factors
-    let player1_change = player1_k * (player1_score - expected_player1);
-    let player2_change = player2_k * (player2_score - expected_player2);
-
-    (player1_change, player2_change)
-}
-
 /// Calculate dynamic K-factor based on player experience
 /// Formula: K = base_k + (new_player_k_bonus * e^(-games_played / bonus_period))
 fn calculate_dynamic_k_factor(config: &EloConfig, games_played: i32) -> f64 {
@@ -310,4 +263,78 @@ pub async fn get_config_by_version(
             new_player_bonus_period,
         },
     ))
+}
+
+/// Enum to represent which player won a game
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub enum GameWinner {
+    Player1,
+    Player2,
+}
+
+/// Represents ELO changes for a single game within a match
+#[derive(Debug, Clone)]
+pub struct MatchEloChange {
+    pub game_id: Uuid,
+    pub player1_id: Uuid,
+    pub player2_id: Uuid,
+    pub player1_elo_before: f64,
+    pub player1_elo_after: f64,
+    pub player1_elo_change: f64,
+    pub player2_elo_before: f64,
+    pub player2_elo_after: f64,
+    pub player2_elo_change: f64,
+}
+
+/// Calculate ELO changes for all games in a match sequentially
+/// Each game uses the updated ELO from the previous game
+pub fn calculate_match_elo_changes(
+    player1_id: Uuid,
+    player2_id: Uuid,
+    player1_starting_elo: f64,
+    player2_starting_elo: f64,
+    games: Vec<(Uuid, GameWinner)>, // (game_id, winner)
+    player1_k_factor: f64,
+    player2_k_factor: f64,
+) -> Vec<MatchEloChange> {
+    let mut current_p1_elo = player1_starting_elo;
+    let mut current_p2_elo = player2_starting_elo;
+    let mut changes = Vec::new();
+
+    for (game_id, winner) in games {
+        // Calculate expected scores
+        let expected_p1 = 1.0 / (1.0 + 10_f64.powf((current_p2_elo - current_p1_elo) / 400.0));
+        let expected_p2 = 1.0 - expected_p1;
+
+        // Determine actual scores based on winner
+        let (p1_score, p2_score) = match winner {
+            GameWinner::Player1 => (1.0, 0.0),
+            GameWinner::Player2 => (0.0, 1.0),
+        };
+
+        // Calculate ELO changes
+        let p1_change = player1_k_factor * (p1_score - expected_p1);
+        let p2_change = player2_k_factor * (p2_score - expected_p2);
+
+        let p1_after = current_p1_elo + p1_change;
+        let p2_after = current_p2_elo + p2_change;
+
+        changes.push(MatchEloChange {
+            game_id,
+            player1_id,
+            player2_id,
+            player1_elo_before: current_p1_elo,
+            player1_elo_after: p1_after,
+            player1_elo_change: p1_change,
+            player2_elo_before: current_p2_elo,
+            player2_elo_after: p2_after,
+            player2_elo_change: p2_change,
+        });
+
+        // Update current ELOs for next game
+        current_p1_elo = p1_after;
+        current_p2_elo = p2_after;
+    }
+
+    changes
 }

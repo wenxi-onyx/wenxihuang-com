@@ -88,16 +88,30 @@
 		const ctx = chartCanvas.getContext('2d');
 		if (!ctx) return;
 
-		// Prepare data points
-		const dataPoints = history.map(point => ({
-			x: new Date(point.created_at),
-			y: point.elo_after
-		}));
+		// Get current theme
+		const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+		const textColor = isDark ? '#ffffff' : '#000000';
+		const lineColor = isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)';
+		const fillColor = isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)';
+		const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)';
+		const borderColor = isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)';
+
+		// Prepare data points with sequential indices for even spacing
+		// Store dates separately for tooltip
+		const dates: Date[] = [];
+		const dataPoints = history.map((point, index) => {
+			dates.push(new Date(point.created_at));
+			return {
+				x: index + 1, // Use index for even spacing (start from 1 since we'll add a 0 point)
+				y: point.elo_after
+			};
+		});
 
 		// Add starting point if we have history
 		if (history.length > 0) {
+			dates.unshift(new Date(history[0].created_at));
 			dataPoints.unshift({
-				x: new Date(history[0].created_at),
+				x: 0,
 				y: history[0].elo_before
 			});
 		}
@@ -108,13 +122,19 @@
 				datasets: [{
 					label: 'ELO Rating',
 					data: dataPoints,
-					borderColor: 'rgb(59, 130, 246)',
-					backgroundColor: 'rgba(59, 130, 246, 0.1)',
-					borderWidth: 2,
-					pointRadius: 3,
-					pointHoverRadius: 5,
+					borderColor: lineColor,
+					backgroundColor: fillColor,
+					borderWidth: 1,
+					pointRadius: 1.5,
+					pointHoverRadius: 4,
+					pointBackgroundColor: lineColor,
+					pointBorderColor: lineColor,
+					pointHoverBackgroundColor: textColor,
+					pointHoverBorderColor: textColor,
+					pointBorderWidth: 1,
+					pointHoverBorderWidth: 2,
 					fill: true,
-					tension: 0.1
+					tension: 0.15
 				}]
 			},
 			options: {
@@ -123,28 +143,49 @@
 				plugins: {
 					title: {
 						display: true,
-						text: 'ELO Rating Over Time',
+						text: 'ELO RATING OVER TIME',
+						color: textColor,
 						font: {
-							size: 16,
-							weight: 'bold'
+							size: 11,
+							weight: isDark ? '500' : '300',
+							family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+						},
+						padding: {
+							top: 0,
+							bottom: 20
 						}
 					},
 					legend: {
 						display: false
 					},
 					tooltip: {
-						mode: 'index',
-						intersect: false,
+						enabled: true,
+						backgroundColor: isDark ? 'rgba(0, 0, 0, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+						titleColor: textColor,
+						bodyColor: textColor,
+						borderColor: borderColor,
+						borderWidth: 1,
+						padding: 12,
+						displayColors: false,
+						titleFont: {
+							size: 10,
+							weight: '400',
+							family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+						},
+						bodyFont: {
+							size: 11,
+							weight: isDark ? '500' : '300',
+							family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+						},
 						callbacks: {
 							title: (context) => {
 								const xValue = context[0]?.parsed?.x;
-								if (xValue) {
-									const date = new Date(xValue);
-									return date.toLocaleDateString('en-US', {
+								if (xValue !== null && xValue !== undefined && dates[xValue]) {
+									return dates[xValue].toLocaleDateString('en-US', {
 										year: 'numeric',
 										month: 'short',
 										day: 'numeric'
-									});
+									}).toUpperCase();
 								}
 								return '';
 							},
@@ -157,22 +198,71 @@
 				},
 				scales: {
 					x: {
-						type: 'time',
-						time: {
-							unit: 'day',
-							displayFormats: {
-								day: 'MMM d'
-							}
+						type: 'linear',
+						grid: {
+							color: gridColor,
+							lineWidth: 1
+						},
+						border: {
+							display: false
 						},
 						title: {
 							display: true,
-							text: 'Date'
+							text: 'MATCH NUMBER',
+							color: textColor,
+							font: {
+								size: 9,
+								weight: isDark ? '400' : '300',
+								family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+							},
+							padding: {
+								top: 12
+							}
+						},
+						ticks: {
+							stepSize: 1,
+							color: textColor,
+							font: {
+								size: 10,
+								weight: '300',
+								family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+							},
+							padding: 8,
+							callback: function(value) {
+								// Show tick labels for whole numbers only
+								return Number.isInteger(value) ? value : '';
+							}
 						}
 					},
 					y: {
+						grid: {
+							color: gridColor,
+							lineWidth: 1
+						},
+						border: {
+							display: false
+						},
 						title: {
 							display: true,
-							text: 'ELO Rating'
+							text: 'ELO RATING',
+							color: textColor,
+							font: {
+								size: 9,
+								weight: isDark ? '400' : '300',
+								family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+							},
+							padding: {
+								bottom: 12
+							}
+						},
+						ticks: {
+							color: textColor,
+							font: {
+								size: 10,
+								weight: '300',
+								family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+							},
+							padding: 8
 						},
 						beginAtZero: false
 					}
@@ -256,7 +346,7 @@
 
 			<div class="stat-card">
 				<div class="stat-label">Win Rate</div>
-				<div class="stat-value">{getWinRate(player)}%</div>
+				<div class="stat-value" class:positive={parseFloat(getWinRate(player)) > 50} class:negative={parseFloat(getWinRate(player)) <= 50 && player.games_played > 0}>{getWinRate(player)}%</div>
 			</div>
 
 			<div class="stat-card">
@@ -472,19 +562,35 @@
 	}
 
 	.stat-value.positive {
-		opacity: 0.9;
+		color: rgba(34, 197, 94, 0.9);
+	}
+
+	:global([data-theme='light']) .stat-value.positive {
+		color: rgba(22, 163, 74, 0.9);
 	}
 
 	.stat-value.negative {
-		opacity: 0.7;
+		color: rgba(239, 68, 68, 0.8);
+	}
+
+	:global([data-theme='light']) .stat-value.negative {
+		color: rgba(220, 38, 38, 0.8);
 	}
 
 	.wins {
-		opacity: 0.9;
+		color: rgba(34, 197, 94, 0.85);
+	}
+
+	:global([data-theme='light']) .wins {
+		color: rgba(22, 163, 74, 0.85);
 	}
 
 	.losses {
-		opacity: 0.7;
+		color: rgba(239, 68, 68, 0.75);
+	}
+
+	:global([data-theme='light']) .losses {
+		color: rgba(220, 38, 38, 0.75);
 	}
 
 	.chart-container {
@@ -570,12 +676,20 @@
 
 	.history-table td.positive {
 		font-weight: 300;
-		opacity: 0.9;
+		color: rgba(34, 197, 94, 0.9);
+	}
+
+	:global([data-theme='light']) .history-table td.positive {
+		color: rgba(22, 163, 74, 0.9);
 	}
 
 	.history-table td.negative {
 		font-weight: 300;
-		opacity: 0.7;
+		color: rgba(239, 68, 68, 0.8);
+	}
+
+	:global([data-theme='light']) .history-table td.negative {
+		color: rgba(220, 38, 38, 0.8);
 	}
 
 	.version-badge {

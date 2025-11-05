@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                g.id,\n                g.player1_id,\n                g.player2_id,\n                g.played_at,\n                eh1.elo_before as player1_elo_before,\n                eh1.elo_after as player1_elo_after,\n                eh2.elo_before as player2_elo_before,\n                eh2.elo_after as player2_elo_after\n            FROM games g\n            INNER JOIN elo_history eh1 ON g.id = eh1.game_id\n                AND eh1.player_id = $1\n            INNER JOIN elo_history eh2 ON g.id = eh2.game_id\n                AND eh2.player_id = $2\n            WHERE g.match_id = $3\n            ORDER BY g.played_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "player1_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "player2_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "played_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "player1_elo_before",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 5,
+        "name": "player1_elo_after",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 6,
+        "name": "player2_elo_before",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 7,
+        "name": "player2_elo_after",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6c043d122395b3cc9709c968390fe05274d772f37ab7b0fff9472fb7cd1231a8"
+}

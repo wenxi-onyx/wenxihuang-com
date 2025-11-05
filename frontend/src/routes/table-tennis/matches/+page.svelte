@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { authStore } from '$lib/stores/auth';
-	import { gamesApi, type GameWithDetails, type UpdateGameRequest } from '$lib/api/client';
+	import { matchesApi, type MatchWithDetails } from '$lib/api/client';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import LoginButton from '$lib/components/LoginButton.svelte';
 	import Toast, { showToast } from '$lib/components/Toast.svelte';
@@ -10,10 +10,12 @@
 	const user = $derived($authStore.user);
 	const isAdmin = $derived(user?.role === 'admin');
 
-	let games = $state<GameWithDetails[]>([]);
+	let matches = $state<MatchWithDetails[]>([]);
 	let loading = $state(true);
-	let deletingGameId = $state<string | null>(null);
-	let editingGameId = $state<string | null>(null);
+	let deletingMatchId = $state<string | null>(null);
+
+	// Track which matches are expanded
+	let expandedMatches = $state<Set<string>>(new Set());
 
 	// Pagination state
 	let currentPage = $state(1);
@@ -21,32 +23,35 @@
 	let total = $state(0);
 	let limit = $state(50);
 
-	// Edit form state
-	let editPlayer1Score = $state(0);
-	let editPlayer2Score = $state(0);
-	let editPlayedAt = $state('');
-	let saving = $state(false);
-
 	onMount(async () => {
-		await loadGames();
+		await loadMatches();
 	});
 
-	async function loadGames(page: number = 1) {
+	async function loadMatches(page: number = 1) {
 		try {
 			loading = true;
-			const response = await gamesApi.listGames(page, limit);
-			games = response.games;
+			const response = await matchesApi.listMatches(page, limit);
+			matches = response.matches;
 			currentPage = response.page;
 			totalPages = response.total_pages;
 			total = response.total;
 		} catch (e) {
-			showToast(e instanceof Error ? e.message : 'Failed to load games', 'error');
+			showToast(e instanceof Error ? e.message : 'Failed to load matches', 'error');
 		} finally {
 			loading = false;
 		}
 	}
 
-	async function handleDeleteGame(game: GameWithDetails) {
+	function toggleExpanded(matchId: string) {
+		if (expandedMatches.has(matchId)) {
+			expandedMatches.delete(matchId);
+		} else {
+			expandedMatches.add(matchId);
+		}
+		expandedMatches = new Set(expandedMatches); // Trigger reactivity
+	}
+
+	async function handleDeleteMatch(match: MatchWithDetails) {
 		if (!isAdmin) {
 			showToast('Admin access required', 'error');
 			return;
@@ -54,7 +59,7 @@
 
 		const confirmed = await confirm({
 			title: 'Delete Match',
-			message: `Delete match: ${game.player1_name} (${game.player1_score}) vs ${game.player2_name} (${game.player2_score})?\n\nThis will recalculate all ELOs for the season. This action cannot be undone.`,
+			message: `Delete match: ${match.player1_name} (${match.player1_games_won}) vs ${match.player2_name} (${match.player2_games_won})?\n\nThis will delete all ${match.total_games} game(s) and recalculate ELOs for the season. This action cannot be undone.`,
 			confirmText: 'DELETE',
 			cancelText: 'CANCEL',
 			confirmStyle: 'danger',
@@ -64,97 +69,21 @@
 			return;
 		}
 
-		deletingGameId = game.id;
+		deletingMatchId = match.id;
 		try {
-			await gamesApi.deleteGame(game.id);
+			await matchesApi.deleteMatch(match.id);
 			showToast('Match deleted successfully', 'success');
-			await loadGames(currentPage);
+			await loadMatches(currentPage);
 		} catch (e) {
 			showToast(e instanceof Error ? e.message : 'Failed to delete match', 'error');
 		} finally {
-			deletingGameId = null;
-		}
-	}
-
-	async function startEditing(game: GameWithDetails) {
-		if (!isAdmin) {
-			showToast('Admin access required', 'error');
-			return;
-		}
-
-		// Show confirmation dialog with warning
-		const confirmed = await confirm({
-			title: 'Edit Match',
-			message: `Edit match: ${game.player1_name} (${game.player1_score}) vs ${game.player2_name} (${game.player2_score})?\n\nWarning: This will recalculate all ELO ratings for the entire season. This may take a few seconds.`,
-			confirmText: 'EDIT',
-			cancelText: 'CANCEL',
-			confirmStyle: 'warning',
-		});
-
-		if (!confirmed) {
-			return;
-		}
-
-		editingGameId = game.id;
-		editPlayer1Score = game.player1_score;
-		editPlayer2Score = game.player2_score;
-
-		// Convert played_at to datetime-local format (using UTC to avoid timezone issues)
-		const date = new Date(game.played_at);
-		const year = date.getUTCFullYear();
-		const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-		const day = String(date.getUTCDate()).padStart(2, '0');
-		const hours = String(date.getUTCHours()).padStart(2, '0');
-		const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-		editPlayedAt = `${year}-${month}-${day}T${hours}:${minutes}`;
-	}
-
-	function cancelEditing() {
-		editingGameId = null;
-		editPlayer1Score = 0;
-		editPlayer2Score = 0;
-		editPlayedAt = '';
-	}
-
-	async function handleSaveEdit(game: GameWithDetails) {
-		if (!isAdmin) {
-			showToast('Admin access required', 'error');
-			return;
-		}
-
-		// Validate scores
-		if (editPlayer1Score < 0 || editPlayer2Score < 0) {
-			showToast('Scores cannot be negative', 'error');
-			return;
-		}
-
-		if (editPlayer1Score === editPlayer2Score) {
-			showToast('Game cannot be a tie', 'error');
-			return;
-		}
-
-		saving = true;
-		try {
-			const updateData: UpdateGameRequest = {
-				player1_score: editPlayer1Score,
-				player2_score: editPlayer2Score,
-				played_at: editPlayedAt ? new Date(editPlayedAt).toISOString() : undefined,
-			};
-
-			await gamesApi.updateGame(game.id, updateData);
-			showToast('Match updated successfully', 'success');
-			cancelEditing();
-			await loadGames(currentPage);
-		} catch (e) {
-			showToast(e instanceof Error ? e.message : 'Failed to update match', 'error');
-		} finally {
-			saving = false;
+			deletingMatchId = null;
 		}
 	}
 
 	async function goToPage(page: number) {
 		if (page < 1 || page > totalPages) return;
-		await loadGames(page);
+		await loadMatches(page);
 		// Scroll to top of page
 		window.scrollTo({ top: 0, behavior: 'smooth' });
 	}
@@ -175,8 +104,10 @@
 		return change >= 0 ? `+${change.toFixed(1)}` : change.toFixed(1);
 	}
 
-	function getWinner(game: GameWithDetails): 'player1' | 'player2' {
-		return game.player1_score > game.player2_score ? 'player1' : 'player2';
+	function getMatchWinner(match: MatchWithDetails): 'player1' | 'player2' | 'tie' {
+		if (match.player1_games_won > match.player2_games_won) return 'player1';
+		if (match.player2_games_won > match.player1_games_won) return 'player2';
+		return 'tie';
 	}
 </script>
 
@@ -197,15 +128,15 @@
 		</nav>
 	</header>
 
-	{#if !loading && games.length > 0}
+	{#if !loading && matches.length > 0}
 		<div class="pagination-info">
-			Showing {games.length} of {total} matches
+			Showing {matches.length} of {total} matches
 		</div>
 	{/if}
 
 	{#if loading}
 		<div class="loading">Loading match history...</div>
-	{:else if games.length === 0}
+	{:else if matches.length === 0}
 		<div class="empty-state">
 			<p>No matches found.</p>
 			{#if user}
@@ -252,123 +183,107 @@
 			</div>
 		{/if}
 
-		<div class="games-list">
-			{#each games as game}
-				<div class="game-card" class:deleting={deletingGameId === game.id} class:editing={editingGameId === game.id}>
-					<div class="game-header">
-						<div class="season-badge">{game.season_name}</div>
-						<div class="date">{formatDate(game.played_at)}</div>
-						{#if isAdmin && editingGameId !== game.id}
+		<div class="matches-list">
+			{#each matches as match}
+				<div class="match-card" class:deleting={deletingMatchId === match.id}>
+					<div class="match-header">
+						<div class="season-badge">{match.season_name}</div>
+						<div class="date">{formatDate(match.submitted_at)}</div>
+						{#if isAdmin}
 							<div class="header-actions">
 								<button
-									class="btn-edit"
-									onclick={() => startEditing(game)}
-									disabled={deletingGameId === game.id || editingGameId !== null}
-								>
-									EDIT
-								</button>
-								<button
 									class="btn-delete"
-									onclick={() => handleDeleteGame(game)}
-									disabled={deletingGameId === game.id || editingGameId !== null}
+									onclick={() => handleDeleteMatch(match)}
+									disabled={deletingMatchId === match.id}
 								>
-									{deletingGameId === game.id ? 'DELETING...' : 'DELETE'}
+									{deletingMatchId === match.id ? 'DELETING...' : 'DELETE'}
 								</button>
 							</div>
 						{/if}
 					</div>
 
-					{#if editingGameId === game.id}
-						<!-- Edit Mode -->
-						<div class="edit-form">
-							<div class="edit-row">
-								<div class="edit-player">
-									<div class="player-name">{game.player1_name}</div>
-									<input
-										type="number"
-										bind:value={editPlayer1Score}
-										min="0"
-										class="score-input"
-									/>
-								</div>
-								<div class="vs">VS</div>
-								<div class="edit-player">
-									<div class="player-name">{game.player2_name}</div>
-									<input
-										type="number"
-										bind:value={editPlayer2Score}
-										min="0"
-										class="score-input"
-									/>
+					<div class="match-summary">
+						<div class="player" class:winner={getMatchWinner(match) === 'player1'}>
+							<div class="player-info">
+								<div class="player-name">{match.player1_name}</div>
+								<div class="elo-info">
+									<span class="elo-before">{match.player1_elo_before.toFixed(0)}</span>
+									<span class="elo-arrow">→</span>
+									<span class="elo-after">{match.player1_elo_after.toFixed(0)}</span>
+									<span class="elo-change" class:positive={match.player1_elo_change >= 0} class:negative={match.player1_elo_change < 0}>
+										{formatEloChange(match.player1_elo_change)}
+									</span>
 								</div>
 							</div>
-							<div class="edit-date">
-								<label for="edit-date-{game.id}">Match Date/Time</label>
-								<input
-									id="edit-date-{game.id}"
-									type="datetime-local"
-									bind:value={editPlayedAt}
-									class="date-input"
-								/>
-							</div>
-							<div class="edit-actions">
-								<button
-									class="btn-save"
-									onclick={() => handleSaveEdit(game)}
-									disabled={saving}
-								>
-									{saving ? 'SAVING...' : 'SAVE'}
-								</button>
-								<button
-									class="btn-cancel"
-									onclick={cancelEditing}
-									disabled={saving}
-								>
-									CANCEL
-								</button>
+							<div class="match-score">{match.player1_games_won}</div>
+						</div>
+
+						<div class="vs">VS</div>
+
+						<div class="player" class:winner={getMatchWinner(match) === 'player2'}>
+							<div class="match-score">{match.player2_games_won}</div>
+							<div class="player-info">
+								<div class="player-name">{match.player2_name}</div>
+								<div class="elo-info">
+									<span class="elo-before">{match.player2_elo_before.toFixed(0)}</span>
+									<span class="elo-arrow">→</span>
+									<span class="elo-after">{match.player2_elo_after.toFixed(0)}</span>
+									<span class="elo-change" class:positive={match.player2_elo_change >= 0} class:negative={match.player2_elo_change < 0}>
+										{formatEloChange(match.player2_elo_change)}
+									</span>
+								</div>
 							</div>
 						</div>
-					{:else}
-						<!-- View Mode -->
-						<div class="game-content">
-							<div class="player" class:winner={getWinner(game) === 'player1'}>
-								<div class="player-info">
-									<div class="player-name">{game.player1_name}</div>
-									<div class="elo-info">
-										<span class="elo-before">{game.player1_elo_before.toFixed(0)}</span>
-										<span class="elo-arrow">→</span>
-										<span class="elo-after">{game.player1_elo_after.toFixed(0)}</span>
-										<span class="elo-change" class:positive={game.player1_elo_change >= 0} class:negative={game.player1_elo_change < 0}>
+					</div>
+
+					<button
+						class="expand-btn"
+						onclick={() => toggleExpanded(match.id)}
+						type="button"
+					>
+						{expandedMatches.has(match.id) ? '▲' : '▼'}
+						{expandedMatches.has(match.id) ? 'Hide' : 'Show'} {match.total_games} Game{match.total_games !== 1 ? 's' : ''}
+					</button>
+
+					{#if expandedMatches.has(match.id)}
+						<div class="games-details">
+							<div class="games-header">
+								<span class="game-col-label">Game</span>
+								<span class="game-col-label">Winner</span>
+								<span class="game-col-label">{match.player1_name} ELO</span>
+								<span class="game-col-label">{match.player2_name} ELO</span>
+							</div>
+							{#each match.games as game, index}
+								<div class="game-detail">
+									<div class="game-number">#{index + 1}</div>
+									<div class="game-winner">
+										{game.winner === 'Player1' ? match.player1_name : match.player2_name}
+									</div>
+									<div class="game-elo">
+										<span class="elo-value">{game.player1_elo_before.toFixed(0)}</span>
+										<span class="elo-arrow-small">→</span>
+										<span class="elo-value">{game.player1_elo_after.toFixed(0)}</span>
+										<span class="elo-change-small" class:positive={game.player1_elo_change >= 0} class:negative={game.player1_elo_change < 0}>
 											{formatEloChange(game.player1_elo_change)}
 										</span>
 									</div>
-								</div>
-								<div class="score">{game.player1_score}</div>
-							</div>
-
-							<div class="vs">VS</div>
-
-							<div class="player" class:winner={getWinner(game) === 'player2'}>
-								<div class="score">{game.player2_score}</div>
-								<div class="player-info">
-									<div class="player-name">{game.player2_name}</div>
-									<div class="elo-info">
-										<span class="elo-before">{game.player2_elo_before.toFixed(0)}</span>
-										<span class="elo-arrow">→</span>
-										<span class="elo-after">{game.player2_elo_after.toFixed(0)}</span>
-										<span class="elo-change" class:positive={game.player2_elo_change >= 0} class:negative={game.player2_elo_change < 0}>
+									<div class="game-elo">
+										<span class="elo-value">{game.player2_elo_before.toFixed(0)}</span>
+										<span class="elo-arrow-small">→</span>
+										<span class="elo-value">{game.player2_elo_after.toFixed(0)}</span>
+										<span class="elo-change-small" class:positive={game.player2_elo_change >= 0} class:negative={game.player2_elo_change < 0}>
 											{formatEloChange(game.player2_elo_change)}
 										</span>
 									</div>
 								</div>
-							</div>
+							{/each}
 						</div>
 					{/if}
 				</div>
 			{/each}
 		</div>
 
-		<!-- Pagination Controls -->
+		<!-- Pagination Controls (Bottom) -->
 		{#if totalPages > 1}
 			<div class="pagination">
 				<button
@@ -497,35 +412,29 @@
 		opacity: 0.8;
 	}
 
-	.games-list {
+	.matches-list {
 		display: flex;
 		flex-direction: column;
 		gap: 1.5rem;
 		margin-bottom: 2rem;
 	}
 
-	.game-card {
+	.match-card {
 		background: transparent;
 		border: 1px solid var(--border-subtle);
 		padding: 1.5rem;
 		transition: all 0.2s ease;
 	}
 
-	.game-card:hover {
+	.match-card:hover {
 		border-color: var(--border-active);
 	}
 
-	.game-card.deleting,
-	.game-card.editing {
+	.match-card.deleting {
 		opacity: 0.6;
 	}
 
-	.game-card.editing {
-		opacity: 1;
-		border-color: var(--border-active);
-	}
-
-	.game-header {
+	.match-header {
 		display: grid;
 		grid-template-columns: 1fr auto 1fr;
 		align-items: center;
@@ -544,6 +453,10 @@
 		color: var(--text-primary);
 		opacity: 0.7;
 		justify-self: start;
+		max-width: 250px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.date {
@@ -562,11 +475,12 @@
 		grid-column: 3;
 	}
 
-	.game-content {
+	.match-summary {
 		display: grid;
 		grid-template-columns: 1fr auto 1fr;
 		gap: 2rem;
 		align-items: center;
+		margin-bottom: 1rem;
 	}
 
 	.player {
@@ -579,7 +493,7 @@
 		font-weight: 400;
 	}
 
-	.player.winner .score {
+	.player.winner .match-score {
 		font-weight: 400;
 		opacity: 1;
 	}
@@ -631,7 +545,7 @@
 		color: rgba(255, 100, 100, 0.8);
 	}
 
-	.score {
+	.match-score {
 		font-size: 2rem;
 		font-weight: 300;
 		color: var(--text-primary);
@@ -649,10 +563,7 @@
 		text-align: center;
 	}
 
-	.btn-edit,
-	.btn-delete,
-	.btn-save,
-	.btn-cancel {
+	.btn-delete {
 		padding: 0.5rem 1rem;
 		background: transparent;
 		border: 1px solid var(--border-subtle);
@@ -666,109 +577,121 @@
 		transition: all 0.2s ease;
 	}
 
-	.btn-edit:hover:not(:disabled) {
-		border-color: rgba(100, 200, 255, 0.5);
-		background: rgba(100, 200, 255, 0.05);
-		color: rgb(150, 220, 255);
-	}
-
 	.btn-delete:hover:not(:disabled) {
 		border-color: rgba(255, 100, 100, 0.5);
 		background: rgba(255, 100, 100, 0.05);
 		color: rgb(255, 150, 150);
 	}
 
-	.btn-save:hover:not(:disabled) {
-		border-color: rgba(100, 255, 100, 0.5);
-		background: rgba(100, 255, 100, 0.05);
-		color: rgb(150, 255, 150);
-	}
-
-	.btn-cancel:hover:not(:disabled) {
-		border-color: var(--border-active);
-		opacity: 0.8;
-	}
-
-	.btn-edit:disabled,
-	.btn-delete:disabled,
-	.btn-save:disabled,
-	.btn-cancel:disabled {
+	.btn-delete:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 	}
 
-	/* Edit Form Styles */
-	.edit-form {
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
-	}
-
-	.edit-row {
-		display: grid;
-		grid-template-columns: 1fr auto 1fr;
-		gap: 2rem;
-		align-items: center;
-	}
-
-	.edit-player {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.score-input {
+	.expand-btn {
 		width: 100%;
 		padding: 0.75rem;
-		font-size: 1.5rem;
-		font-family: inherit;
-		font-weight: 300;
-		text-align: center;
-		border: 1px solid var(--border-subtle);
 		background: transparent;
+		border: 1px solid var(--border-subtle);
+		border-top: none;
 		color: var(--text-primary);
-		outline: none;
-		transition: border-color 0.2s ease;
-	}
-
-	.score-input:focus {
-		border-color: var(--border-active);
-	}
-
-	.edit-date {
+		font-size: 0.75rem;
+		font-weight: 300;
+		font-family: inherit;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		cursor: pointer;
+		transition: all 0.2s ease;
 		display: flex;
-		flex-direction: column;
+		align-items: center;
+		justify-content: center;
 		gap: 0.5rem;
 	}
 
-	.edit-date label {
+	.expand-btn:hover {
+		border-color: var(--border-active);
+		background: rgba(255, 255, 255, 0.02);
+	}
+
+	.games-details {
+		margin-top: 1rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--border-subtle);
+	}
+
+	.games-header {
+		display: grid;
+		grid-template-columns: 80px 1fr 200px 200px;
+		gap: 1rem;
+		padding: 0.75rem 1rem;
+		background: rgba(255, 255, 255, 0.02);
+		border-bottom: 1px solid var(--border-subtle);
+	}
+
+	.game-col-label {
 		font-size: 0.75rem;
 		font-weight: 300;
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
 		color: var(--text-primary);
-		opacity: 0.7;
+		opacity: 0.5;
 	}
 
-	.date-input {
-		padding: 0.75rem;
+	.game-detail {
+		display: grid;
+		grid-template-columns: 80px 1fr 200px 200px;
+		gap: 1rem;
+		padding: 0.75rem 1rem;
+		align-items: center;
+		border-bottom: 1px solid var(--border-subtle);
+	}
+
+	.game-detail:last-child {
+		border-bottom: none;
+	}
+
+	.game-number {
 		font-size: 0.875rem;
-		font-family: inherit;
-		border: 1px solid var(--border-subtle);
-		background: transparent;
+		font-weight: 300;
 		color: var(--text-primary);
-		outline: none;
-		transition: border-color 0.2s ease;
+		opacity: 0.6;
 	}
 
-	.date-input:focus {
-		border-color: var(--border-active);
+	.game-winner {
+		font-size: 0.875rem;
+		font-weight: 300;
+		color: var(--text-primary);
 	}
 
-	.edit-actions {
+	.game-elo {
+		font-size: 0.75rem;
+		font-weight: 300;
+		color: var(--text-primary);
+		opacity: 0.7;
 		display: flex;
-		justify-content: flex-end;
-		gap: 0.75rem;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.elo-value {
+		min-width: 3rem;
+	}
+
+	.elo-arrow-small {
+		opacity: 0.3;
+	}
+
+	.elo-change-small {
+		font-weight: 400;
+		min-width: 3rem;
+	}
+
+	.elo-change-small.positive {
+		color: rgba(100, 255, 100, 0.8);
+	}
+
+	.elo-change-small.negative {
+		color: rgba(255, 100, 100, 0.8);
 	}
 
 	/* Pagination Styles */
@@ -827,8 +750,7 @@
 			align-items: flex-start;
 		}
 
-		.game-content,
-		.edit-row {
+		.match-summary {
 			grid-template-columns: 1fr;
 			gap: 1.5rem;
 		}
@@ -854,20 +776,32 @@
 			display: none;
 		}
 
-		.score {
+		.match-score {
 			font-size: 1.5rem;
 		}
 
-		.header-actions,
-		.edit-actions {
+		.header-actions {
 			flex-direction: column;
 		}
 
-		.btn-edit,
-		.btn-delete,
-		.btn-save,
-		.btn-cancel {
+		.season-badge {
+			max-width: 150px;
+			font-size: 0.65rem;
+		}
+
+		.btn-delete {
 			width: 100%;
+		}
+
+		.games-header,
+		.game-detail {
+			grid-template-columns: 60px 1fr;
+		}
+
+		.game-col-label:nth-child(3),
+		.game-col-label:nth-child(4),
+		.game-elo {
+			display: none;
 		}
 
 		.pagination {

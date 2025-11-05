@@ -42,7 +42,7 @@ INSERT INTO elo_configurations (
     true
 );
 
--- v3 configuration with dynamic K-factor
+-- v2 configuration with dynamic K-factor
 INSERT INTO elo_configurations (
     version_name,
     k_factor,
@@ -53,7 +53,7 @@ INSERT INTO elo_configurations (
     description,
     is_active
 ) VALUES (
-    'v3',
+    'v2',
     20.0,
     20.0,
     48.0,

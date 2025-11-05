@@ -30,7 +30,7 @@ Each migration represents a complete system or major feature:
 - **Features**:
   - Multiple ELO algorithm versions
   - Dynamic K-factor support (base K + new player bonus)
-  - Default v1 (standard K=32) and v3 (dynamic K with bonus)
+  - Default v1 (standard K=32) and v2 (dynamic K with bonus)
 
 ### 004: Seasons System
 - **File**: `004_create_seasons_system.sql`

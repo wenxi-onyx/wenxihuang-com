@@ -81,6 +81,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         None, // No dynamic K-factor by default
         None,
         None,
+        None, // elo_version
         admin_id,
         None, // Initialize all active players
     )

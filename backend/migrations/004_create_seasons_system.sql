@@ -15,6 +15,7 @@ CREATE TABLE seasons (
     base_k_factor FLOAT,                          -- Base K-factor for dynamic calculation
     new_player_k_bonus FLOAT,                     -- Bonus K-factor for new players
     new_player_bonus_period INT,                  -- Number of games for bonus period
+    elo_version VARCHAR(50),                      -- References ELO configuration version (optional)
     is_active BOOLEAN NOT NULL DEFAULT false,     -- The most recent season is active
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_by UUID REFERENCES users(id),
@@ -24,6 +25,14 @@ CREATE TABLE seasons (
 -- Index for quick lookup of active season
 CREATE INDEX idx_seasons_active ON seasons(is_active) WHERE is_active = true;
 CREATE INDEX idx_seasons_start_date ON seasons(start_date DESC);
+CREATE INDEX idx_seasons_elo_version ON seasons(elo_version);
+
+-- Add foreign key constraint for elo_version (with SET NULL on delete)
+ALTER TABLE seasons
+    ADD CONSTRAINT fk_seasons_elo_version
+    FOREIGN KEY (elo_version)
+    REFERENCES elo_configurations(version_name)
+    ON DELETE SET NULL;
 
 -- Create player_seasons table to track per-season statistics
 CREATE TABLE player_seasons (
@@ -49,6 +58,10 @@ CREATE INDEX idx_player_seasons_included ON player_seasons(season_id, is_include
 -- Add comment to explain the column
 COMMENT ON COLUMN player_seasons.is_included IS 'Whether this player is included in this season. Excluded players won''t appear in leaderboards or be able to play games in this season.';
 
+-- Add season_id to matches table
+ALTER TABLE matches ADD COLUMN season_id UUID REFERENCES seasons(id);
+CREATE INDEX idx_matches_season ON matches(season_id);
+
 -- Add season_id to games table
 ALTER TABLE games ADD COLUMN season_id UUID REFERENCES seasons(id);
 CREATE INDEX idx_games_season ON games(season_id);
@@ -65,6 +78,7 @@ INSERT INTO seasons (
     start_date,
     starting_elo,
     k_factor,
+    elo_version,
     is_active
 ) VALUES (
     'All-Time',
@@ -72,8 +86,13 @@ INSERT INTO seasons (
     '2000-01-01 00:00:00+00',  -- Far past date
     1000.0,
     32.0,
-    false  -- Not active by default; will activate when first season is created
+    'v1',  -- Use v1 (standard ELO with K=32)
+    true  -- Active by default until another season is created
 );
+
+-- Update existing matches to belong to All-Time season
+UPDATE matches SET season_id = (SELECT id FROM seasons WHERE name = 'All-Time')
+WHERE season_id IS NULL;
 
 -- Update existing games to belong to All-Time season
 UPDATE games SET season_id = (SELECT id FROM seasons WHERE name = 'All-Time')
@@ -110,6 +129,7 @@ SELECT
 FROM players p;
 
 -- Make season_id NOT NULL now that we've backfilled
+ALTER TABLE matches ALTER COLUMN season_id SET NOT NULL;
 ALTER TABLE games ALTER COLUMN season_id SET NOT NULL;
 ALTER TABLE elo_history ALTER COLUMN season_id SET NOT NULL;
 

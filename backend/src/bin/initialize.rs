@@ -16,7 +16,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let pool = PgPool::connect(&database_url).await?;
     println!("✓ Connected\n");
 
-    // Step 1: Set up ELO configuration v3 as active
+    // Step 1: Set up ELO configuration v2 as active
     println!("Step 1: Configuring ELO algorithm...");
 
     // Deactivate all existing configs
@@ -25,16 +25,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .await
         .ok();
 
-    // Set v3 as active (it should already exist from migrations)
+    // Set v2 as active (it should already exist from migrations)
     let result =
-        sqlx::query("UPDATE elo_configurations SET is_active = true WHERE version_name = 'v3'")
+        sqlx::query("UPDATE elo_configurations SET is_active = true WHERE version_name = 'v2'")
             .execute(&pool)
             .await?;
 
     if result.rows_affected() > 0 {
-        println!("✓ ELO algorithm v3 (1000 base, varying K-factor) is now active\n");
+        println!("✓ ELO algorithm v2 (1000 base, varying K-factor) is now active\n");
     } else {
-        println!("⚠ Warning: v3 config not found in database\n");
+        println!("⚠ Warning: v2 config not found in database\n");
     }
 
     // Step 2: Import historic matches
@@ -165,11 +165,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let new_winner_elo = winner_elo + winner_change;
         let new_loser_elo = loser_elo + loser_change;
 
-        // Insert game
-        let game_id: (sqlx::types::Uuid,) = sqlx::query_as(
-            "INSERT INTO games (player1_id, player2_id, player1_score, player2_score, played_at, elo_version, season_id)
-             VALUES ($1, $2, 1, 0, $3, $4, $5) RETURNING id"
+        // Create match record (one match per historical game)
+        let match_id: (sqlx::types::Uuid,) = sqlx::query_as(
+            "INSERT INTO matches (player1_id, player2_id, submitted_at, season_id)
+             VALUES ($1, $2, $3, $4) RETURNING id",
         )
+        .bind(winner_id)
+        .bind(loser_id)
+        .bind(time)
+        .bind(season_id)
+        .fetch_one(&pool)
+        .await?;
+
+        // Insert game linked to match (player1 is always winner)
+        let game_id: (sqlx::types::Uuid,) = sqlx::query_as(
+            "INSERT INTO games (match_id, player1_id, player2_id, played_at, elo_version, season_id)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id"
+        )
+        .bind(match_id.0)
         .bind(winner_id)
         .bind(loser_id)
         .bind(time)

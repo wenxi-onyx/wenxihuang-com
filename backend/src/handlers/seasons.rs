@@ -29,6 +29,7 @@ pub struct CreateSeasonRequest {
     pub base_k_factor: Option<f64>,
     pub new_player_k_bonus: Option<f64>,
     pub new_player_bonus_period: Option<i32>,
+    pub elo_version: Option<String>, // Reference to ELO configuration version
     pub player_ids: Option<Vec<Uuid>>, // Optional list of player IDs to include in the season
 }
 
@@ -43,6 +44,7 @@ pub struct SeasonResponse {
     pub base_k_factor: Option<f64>,
     pub new_player_k_bonus: Option<f64>,
     pub new_player_bonus_period: Option<i32>,
+    pub elo_version: Option<String>,
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
 }
@@ -59,6 +61,7 @@ impl From<seasons::Season> for SeasonResponse {
             base_k_factor: s.base_k_factor,
             new_player_k_bonus: s.new_player_k_bonus,
             new_player_bonus_period: s.new_player_bonus_period,
+            elo_version: s.elo_version,
             is_active: s.is_active,
             created_at: s.created_at,
         }
@@ -212,6 +215,26 @@ pub async fn create_season(
         ));
     }
 
+    // Validate that the ELO version exists if provided
+    if let Some(ref elo_version) = req.elo_version {
+        let exists: Option<(String,)> =
+            sqlx::query_as("SELECT version_name FROM elo_configurations WHERE version_name = $1")
+                .bind(elo_version)
+                .fetch_optional(&pool)
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to check ELO configuration existence: {}", e);
+                    AuthError::DatabaseError
+                })?;
+
+        if exists.is_none() {
+            return Err(AuthError::InvalidInput(format!(
+                "ELO configuration '{}' does not exist",
+                elo_version
+            )));
+        }
+    }
+
     // Create season (automatically activates it, initializes players, and recalculates if historical)
     let season = seasons::create_season(
         &pool,
@@ -223,6 +246,7 @@ pub async fn create_season(
         req.base_k_factor,
         req.new_player_k_bonus,
         req.new_player_bonus_period,
+        req.elo_version,
         admin_user.id,
         req.player_ids,
     )
@@ -523,4 +547,55 @@ pub async fn remove_player_from_season(
     Ok(Json(serde_json::json!({
         "message": "Player removed from season successfully"
     })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateSeasonEloVersionRequest {
+    pub elo_version: Option<String>,
+}
+
+/// Update a season's ELO version (admin only)
+pub async fn update_season_elo_version(
+    State(pool): State<PgPool>,
+    Extension(_admin_user): Extension<User>,
+    Path(season_id): Path<Uuid>,
+    Json(req): Json<UpdateSeasonEloVersionRequest>,
+) -> Result<Json<SeasonResponse>, AuthError> {
+    // Validate that the ELO version exists if provided
+    if let Some(ref elo_version) = req.elo_version {
+        let exists: Option<(String,)> =
+            sqlx::query_as("SELECT version_name FROM elo_configurations WHERE version_name = $1")
+                .bind(elo_version)
+                .fetch_optional(&pool)
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to check ELO configuration existence: {}", e);
+                    AuthError::DatabaseError
+                })?;
+
+        if exists.is_none() {
+            return Err(AuthError::InvalidInput(format!(
+                "ELO configuration '{}' does not exist",
+                elo_version
+            )));
+        }
+    }
+
+    seasons::update_season_elo_version(&pool, season_id, req.elo_version)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update season ELO version: {}", e);
+            AuthError::DatabaseError
+        })?;
+
+    // Fetch and return the updated season
+    let season = seasons::get_season_by_id(&pool, season_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch updated season: {}", e);
+            AuthError::DatabaseError
+        })?
+        .ok_or(AuthError::InvalidInput("Season not found".to_string()))?;
+
+    Ok(Json(SeasonResponse::from(season)))
 }

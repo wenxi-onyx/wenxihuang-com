@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, player1_id, player2_id, season_id, played_at\n        FROM games\n        WHERE id = $1\n        ",
+  "query": "\n        INSERT INTO matches (player1_id, player2_id, submitted_at, season_id)\n        VALUES ($1, $2, $3, $4)\n        RETURNING id, player1_id, player2_id, submitted_at, season_id, created_at\n        ",
   "describe": {
     "columns": [
       {
@@ -20,17 +20,25 @@
       },
       {
         "ordinal": 3,
+        "name": "submitted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
         "name": "season_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 4,
-        "name": "played_at",
+        "ordinal": 5,
+        "name": "created_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
         "Uuid"
       ]
     },
@@ -39,8 +47,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "2a4d3116287381e589fa80371dce7571f67c7d86ddb185fcbc465f84fd3fd571"
+  "hash": "3eb62ae73a16868f94429988859548cb9147dd548820d0d55098521a786f8125"
 }

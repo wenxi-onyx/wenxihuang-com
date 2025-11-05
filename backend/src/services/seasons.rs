@@ -3,6 +3,9 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+// Type alias for ELO configuration tuple: (k_factor, base_k_factor, new_player_k_bonus, new_player_bonus_period, starting_elo)
+type EloConfigTuple = (f64, Option<f64>, Option<f64>, Option<i32>, f64);
+
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct Season {
     pub id: Uuid,
@@ -14,6 +17,7 @@ pub struct Season {
     pub base_k_factor: Option<f64>,
     pub new_player_k_bonus: Option<f64>,
     pub new_player_bonus_period: Option<i32>,
+    pub elo_version: Option<String>,
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
 }
@@ -80,6 +84,7 @@ pub async fn create_season(
     base_k_factor: Option<f64>,
     new_player_k_bonus: Option<f64>,
     new_player_bonus_period: Option<i32>,
+    elo_version: Option<String>,
     created_by: Uuid,
     player_ids: Option<Vec<Uuid>>,
 ) -> Result<Season, Box<dyn std::error::Error + Send + Sync>> {
@@ -94,8 +99,8 @@ pub async fn create_season(
     let season = sqlx::query_as::<_, Season>(
         "INSERT INTO seasons
          (name, description, start_date, starting_elo, k_factor,
-          base_k_factor, new_player_k_bonus, new_player_bonus_period, created_by, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+          base_k_factor, new_player_k_bonus, new_player_bonus_period, elo_version, created_by, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
          RETURNING *",
     )
     .bind(name)
@@ -106,6 +111,7 @@ pub async fn create_season(
     .bind(base_k_factor)
     .bind(new_player_k_bonus)
     .bind(new_player_bonus_period)
+    .bind(elo_version)
     .bind(created_by)
     .fetch_one(&mut *tx)
     .await?;
@@ -239,6 +245,20 @@ pub async fn activate_season(pool: &PgPool, season_id: Uuid) -> Result<(), sqlx:
         .await?;
 
     tx.commit().await?;
+    Ok(())
+}
+
+/// Update a season's ELO version
+pub async fn update_season_elo_version(
+    pool: &PgPool,
+    season_id: Uuid,
+    elo_version: Option<String>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE seasons SET elo_version = $1 WHERE id = $2")
+        .bind(elo_version)
+        .bind(season_id)
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
@@ -460,17 +480,22 @@ pub async fn get_available_players_for_season(
 }
 
 /// Calculate dynamic K-factor based on player experience within a season
-fn calculate_dynamic_k_factor(season: &Season, games_played: i32) -> f64 {
-    if let (Some(base_k), Some(bonus), Some(period)) = (
-        season.base_k_factor,
-        season.new_player_k_bonus,
-        season.new_player_bonus_period,
-    ) && period > 0
+/// If base_k_factor is provided, uses dynamic calculation, otherwise returns static k_factor
+fn calculate_dynamic_k_factor(
+    k_factor: f64,
+    base_k_factor: Option<f64>,
+    new_player_k_bonus: Option<f64>,
+    new_player_bonus_period: Option<i32>,
+    games_played: i32,
+) -> f64 {
+    if let (Some(base_k), Some(bonus), Some(period)) =
+        (base_k_factor, new_player_k_bonus, new_player_bonus_period)
+        && period > 0
     {
         let decay = (-games_played as f64 / period as f64).exp();
         return base_k + (bonus * decay);
     }
-    season.k_factor
+    k_factor
 }
 
 /// Record a game result and update player_seasons stats
@@ -487,6 +512,16 @@ pub async fn record_game_result(
         .await?
         .ok_or("Season not found")?;
 
+    // Determine elo_version string (max 50 chars for VARCHAR(50))
+    let elo_version_string = season.elo_version.as_deref().unwrap_or_else(|| {
+        // Use truncated season name if no elo_version
+        if season.name.len() <= 50 {
+            &season.name
+        } else {
+            &season.name[..50]
+        }
+    });
+
     // Get or create player_season stats
     let winner_stats = get_player_season_stats(pool, winner_id, season_id)
         .await?
@@ -499,8 +534,20 @@ pub async fn record_game_result(
     let loser_elo_before = loser_stats.current_elo;
 
     // Calculate dynamic K-factors
-    let winner_k = calculate_dynamic_k_factor(&season, winner_stats.games_played);
-    let loser_k = calculate_dynamic_k_factor(&season, loser_stats.games_played);
+    let winner_k = calculate_dynamic_k_factor(
+        season.k_factor,
+        season.base_k_factor,
+        season.new_player_k_bonus,
+        season.new_player_bonus_period,
+        winner_stats.games_played,
+    );
+    let loser_k = calculate_dynamic_k_factor(
+        season.k_factor,
+        season.base_k_factor,
+        season.new_player_k_bonus,
+        season.new_player_bonus_period,
+        loser_stats.games_played,
+    );
 
     // Calculate ELO changes
     let expected_winner = 1.0 / (1.0 + 10_f64.powf((loser_elo_before - winner_elo_before) / 400.0));
@@ -548,7 +595,7 @@ pub async fn record_game_result(
     .bind(game_id)
     .bind(winner_elo_before)
     .bind(winner_elo_after)
-    .bind(&season.name) // Use season name as version
+    .bind(elo_version_string)
     .bind(season_id)
     .bind(played_at)
     .execute(&mut *tx)
@@ -563,7 +610,7 @@ pub async fn record_game_result(
     .bind(game_id)
     .bind(loser_elo_before)
     .bind(loser_elo_after)
-    .bind(&season.name)
+    .bind(elo_version_string)
     .bind(season_id)
     .bind(played_at)
     .execute(&mut *tx)
@@ -574,6 +621,7 @@ pub async fn record_game_result(
 }
 
 /// Recalculate all ELO for a specific season
+/// Processes games grouped by match to maintain sequential ELO calculation within each match
 pub async fn recalculate_season_elo(
     pool: &PgPool,
     season_id: Uuid,
@@ -584,23 +632,85 @@ pub async fn recalculate_season_elo(
 
     tracing::info!("Recalculating ELO for season: {}", season.name);
 
-    // Get all games for this season in chronological order
-    let games: Vec<(Uuid, Uuid, Uuid, i32, i32, DateTime<Utc>)> = sqlx::query_as(
-        "SELECT id, player1_id, player2_id, player1_score, player2_score, played_at
-         FROM games
+    // Determine elo_version string for recording (max 50 chars for VARCHAR(50))
+    let elo_version_string = season.elo_version.as_deref().unwrap_or_else(|| {
+        // Use truncated season name if no elo_version
+        if season.name.len() <= 50 {
+            &season.name
+        } else {
+            &season.name[..50]
+        }
+    });
+
+    // Determine which ELO configuration to use
+    let (k_factor, base_k_factor, new_player_k_bonus, new_player_bonus_period, starting_elo) =
+        if let Some(ref elo_version) = season.elo_version {
+            // Use ELO configuration from elo_configurations table
+            tracing::info!("Using ELO configuration: {}", elo_version);
+            let config: Option<EloConfigTuple> = sqlx::query_as(
+                "SELECT k_factor, base_k_factor, new_player_k_bonus, new_player_bonus_period, starting_elo
+                 FROM elo_configurations
+                 WHERE version_name = $1"
+            )
+            .bind(elo_version)
+            .fetch_optional(pool)
+            .await?;
+
+            match config {
+                Some((k, base_k, bonus, period, start_elo)) => {
+                    tracing::info!(
+                        "Loaded ELO config: k_factor={}, base_k={:?}, bonus={:?}, period={:?}, starting_elo={}",
+                        k,
+                        base_k,
+                        bonus,
+                        period,
+                        start_elo
+                    );
+                    (k, base_k, bonus, period, start_elo)
+                }
+                None => {
+                    tracing::warn!(
+                        "ELO configuration '{}' not found, falling back to season's own values",
+                        elo_version
+                    );
+                    (
+                        season.k_factor,
+                        season.base_k_factor,
+                        season.new_player_k_bonus,
+                        season.new_player_bonus_period,
+                        season.starting_elo,
+                    )
+                }
+            }
+        } else {
+            // Use season's own ELO configuration
+            tracing::info!("Using season's own ELO configuration");
+            (
+                season.k_factor,
+                season.base_k_factor,
+                season.new_player_k_bonus,
+                season.new_player_bonus_period,
+                season.starting_elo,
+            )
+        };
+
+    // Get all matches for this season in chronological order
+    let matches: Vec<(Uuid, Uuid, Uuid, DateTime<Utc>)> = sqlx::query_as(
+        "SELECT id, player1_id, player2_id, submitted_at
+         FROM matches
          WHERE season_id = $1
-         ORDER BY played_at ASC",
+         ORDER BY submitted_at ASC",
     )
     .bind(season_id)
     .fetch_all(pool)
     .await?;
 
-    if games.is_empty() {
-        tracing::info!("No games found for season {}", season.name);
+    if matches.is_empty() {
+        tracing::info!("No matches found for season {}", season.name);
         return Ok(());
     }
 
-    tracing::info!("Found {} games to recalculate", games.len());
+    tracing::info!("Found {} matches to recalculate", matches.len());
 
     // Initialize ELO and stats for all players in this season
     let mut player_elos: HashMap<Uuid, f64> = HashMap::new();
@@ -616,7 +726,7 @@ pub async fn recalculate_season_elo(
             .await?;
 
     for (player_id,) in player_seasons {
-        player_elos.insert(player_id, season.starting_elo);
+        player_elos.insert(player_id, starting_elo);
         player_games_played.insert(player_id, 0);
         player_wins.insert(player_id, 0);
         player_losses.insert(player_id, 0);
@@ -631,96 +741,156 @@ pub async fn recalculate_season_elo(
         .execute(&mut *tx)
         .await?;
 
-    // Process each game
-    for (game_id, player1_id, player2_id, player1_score, player2_score, played_at) in games {
-        // Determine winner and loser based on scores
-        let (winner_id, loser_id) = if player1_score > player2_score {
-            (player1_id, player2_id)
-        } else {
-            (player2_id, player1_id)
-        };
+    // Process each match
+    for (match_id, match_player1_id, match_player2_id, _submitted_at) in matches {
+        // Get all games for this match in chronological order
+        // Note: player1_id is ALWAYS the winner, player2_id is ALWAYS the loser
+        let games: Vec<(Uuid, Uuid, Uuid, DateTime<Utc>)> = sqlx::query_as(
+            "SELECT id, player1_id, player2_id, played_at
+             FROM games
+             WHERE match_id = $1
+             ORDER BY played_at ASC",
+        )
+        .bind(match_id)
+        .fetch_all(&mut *tx)
+        .await?;
+
+        if games.is_empty() {
+            tracing::warn!("Match {} has no games, skipping", match_id);
+            continue;
+        }
 
         // Validate that both players are in this season
-        let winner_elo_before = match player_elos.get(&winner_id) {
+        let player1_elo_before = match player_elos.get(&match_player1_id) {
             Some(&elo) => elo,
             None => {
                 tracing::warn!(
-                    "Skipping game {}: winner {} is not in season {}",
-                    game_id,
-                    winner_id,
+                    "Skipping match {}: player {} is not in season {}",
+                    match_id,
+                    match_player1_id,
                     season.name
                 );
                 continue;
             }
         };
 
-        let loser_elo_before = match player_elos.get(&loser_id) {
+        let player2_elo_before = match player_elos.get(&match_player2_id) {
             Some(&elo) => elo,
             None => {
                 tracing::warn!(
-                    "Skipping game {}: loser {} is not in season {}",
-                    game_id,
-                    loser_id,
+                    "Skipping match {}: player {} is not in season {}",
+                    match_id,
+                    match_player2_id,
                     season.name
                 );
                 continue;
             }
         };
 
-        let winner_games = player_games_played.get(&winner_id).copied().unwrap_or(0);
-        let loser_games = player_games_played.get(&loser_id).copied().unwrap_or(0);
+        // Get games played count for K-factor calculation
+        let player1_games = player_games_played
+            .get(&match_player1_id)
+            .copied()
+            .unwrap_or(0);
+        let player2_games = player_games_played
+            .get(&match_player2_id)
+            .copied()
+            .unwrap_or(0);
 
-        // Calculate dynamic K-factors
-        let winner_k = calculate_dynamic_k_factor(&season, winner_games);
-        let loser_k = calculate_dynamic_k_factor(&season, loser_games);
+        // Calculate dynamic K-factors using the determined configuration
+        let player1_k = calculate_dynamic_k_factor(
+            k_factor,
+            base_k_factor,
+            new_player_k_bonus,
+            new_player_bonus_period,
+            player1_games,
+        );
+        let player2_k = calculate_dynamic_k_factor(
+            k_factor,
+            base_k_factor,
+            new_player_k_bonus,
+            new_player_bonus_period,
+            player2_games,
+        );
 
-        // Calculate ELO changes
-        let expected_winner =
-            1.0 / (1.0 + 10_f64.powf((loser_elo_before - winner_elo_before) / 400.0));
-        let expected_loser = 1.0 - expected_winner;
+        // Build games vector for ELO calculation
+        // For each game, determine which player won
+        let game_winners: Vec<(Uuid, crate::services::elo::GameWinner)> = games
+            .iter()
+            .map(|(game_id, winner_id, _loser_id, _played_at)| {
+                let winner = if winner_id == &match_player1_id {
+                    crate::services::elo::GameWinner::Player1
+                } else {
+                    crate::services::elo::GameWinner::Player2
+                };
+                (*game_id, winner)
+            })
+            .collect();
 
-        let winner_change = winner_k * (1.0 - expected_winner);
-        let loser_change = loser_k * (0.0 - expected_loser);
+        // Calculate sequential ELO changes for all games in this match
+        let elo_changes = crate::services::elo::calculate_match_elo_changes(
+            match_player1_id,
+            match_player2_id,
+            player1_elo_before,
+            player2_elo_before,
+            game_winners,
+            player1_k,
+            player2_k,
+        );
 
-        let winner_elo_after = winner_elo_before + winner_change;
-        let loser_elo_after = loser_elo_before + loser_change;
+        // Record ELO history and update stats for each game
+        for (i, change) in elo_changes.iter().enumerate() {
+            let played_at = games[i].3;
 
-        // Update in-memory stats
-        player_elos.insert(winner_id, winner_elo_after);
-        player_elos.insert(loser_id, loser_elo_after);
-        *player_games_played.entry(winner_id).or_insert(0) += 1;
-        *player_games_played.entry(loser_id).or_insert(0) += 1;
-        *player_wins.entry(winner_id).or_insert(0) += 1;
-        *player_losses.entry(loser_id).or_insert(0) += 1;
+            // Record ELO history for player 1
+            sqlx::query(
+                "INSERT INTO elo_history (player_id, game_id, elo_before, elo_after, elo_version, season_id, created_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)"
+            )
+            .bind(change.player1_id)
+            .bind(change.game_id)
+            .bind(change.player1_elo_before)
+            .bind(change.player1_elo_after)
+            .bind(elo_version_string)
+            .bind(season_id)
+            .bind(played_at)
+            .execute(&mut *tx)
+            .await?;
 
-        // Record ELO history
-        sqlx::query(
-            "INSERT INTO elo_history (player_id, game_id, elo_before, elo_after, elo_version, season_id, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)"
-        )
-        .bind(winner_id)
-        .bind(game_id)
-        .bind(winner_elo_before)
-        .bind(winner_elo_after)
-        .bind(&season.name)
-        .bind(season_id)
-        .bind(played_at)
-        .execute(&mut *tx)
-        .await?;
+            // Record ELO history for player 2
+            sqlx::query(
+                "INSERT INTO elo_history (player_id, game_id, elo_before, elo_after, elo_version, season_id, created_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)"
+            )
+            .bind(change.player2_id)
+            .bind(change.game_id)
+            .bind(change.player2_elo_before)
+            .bind(change.player2_elo_after)
+            .bind(elo_version_string)
+            .bind(season_id)
+            .bind(played_at)
+            .execute(&mut *tx)
+            .await?;
 
-        sqlx::query(
-            "INSERT INTO elo_history (player_id, game_id, elo_before, elo_after, elo_version, season_id, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)"
-        )
-        .bind(loser_id)
-        .bind(game_id)
-        .bind(loser_elo_before)
-        .bind(loser_elo_after)
-        .bind(&season.name)
-        .bind(season_id)
-        .bind(played_at)
-        .execute(&mut *tx)
-        .await?;
+            // Update stats for this game
+            // Determine who won this specific game
+            let (winner_id, loser_id) = if games[i].1 == match_player1_id {
+                (match_player1_id, match_player2_id)
+            } else {
+                (match_player2_id, match_player1_id)
+            };
+
+            *player_games_played.entry(winner_id).or_insert(0) += 1;
+            *player_games_played.entry(loser_id).or_insert(0) += 1;
+            *player_wins.entry(winner_id).or_insert(0) += 1;
+            *player_losses.entry(loser_id).or_insert(0) += 1;
+        }
+
+        // Update in-memory ELOs with final values after processing all games in match
+        if let Some(last_change) = elo_changes.last() {
+            player_elos.insert(match_player1_id, last_change.player1_elo_after);
+            player_elos.insert(match_player2_id, last_change.player2_elo_after);
+        }
     }
 
     // Update player_seasons with final stats
@@ -750,57 +920,57 @@ pub async fn recalculate_season_elo(
     Ok(())
 }
 
-/// Reassign all games to their correct seasons based on played_at timestamp
-/// Games are assigned to the season with the latest start_date that is <= game.played_at
+/// Reassign all matches and games to their correct seasons based on timestamps
+/// Matches are assigned based on submitted_at, games inherit from their match
 /// Uses efficient SQL-based approach for O(n log n) complexity
-/// Games without a matching season are logged but not modified
+/// Records without a matching season are logged but not modified
 pub async fn reassign_games_to_seasons(
     pool: &PgPool,
 ) -> Result<i32, Box<dyn std::error::Error + Send + Sync>> {
-    tracing::info!("Reassigning all games to correct seasons");
+    tracing::info!("Reassigning all matches and games to correct seasons");
 
-    // First, check for games that have no matching season
-    let orphaned_games: Vec<(Uuid, DateTime<Utc>)> = sqlx::query_as(
-        "SELECT id, played_at
-         FROM games
+    // First, check for matches that have no matching season
+    let orphaned_matches: Vec<(Uuid, DateTime<Utc>)> = sqlx::query_as(
+        "SELECT id, submitted_at
+         FROM matches
          WHERE NOT EXISTS (
-             SELECT 1 FROM seasons s WHERE s.start_date <= games.played_at
+             SELECT 1 FROM seasons s WHERE s.start_date <= matches.submitted_at
          )",
     )
     .fetch_all(pool)
     .await?;
 
-    if !orphaned_games.is_empty() {
+    if !orphaned_matches.is_empty() {
         tracing::warn!(
-            "Found {} games with no matching season (played before earliest season):",
-            orphaned_games.len()
+            "Found {} matches with no matching season (submitted before earliest season):",
+            orphaned_matches.len()
         );
-        for (game_id, played_at) in &orphaned_games {
-            tracing::warn!("  Game {} played at {}", game_id, played_at);
+        for (match_id, submitted_at) in &orphaned_matches {
+            tracing::warn!("  Match {} submitted at {}", match_id, submitted_at);
         }
     }
 
-    // Use SQL to efficiently reassign all games in one query
-    // For each game, find the season with the latest start_date <= game.played_at
-    // Only update games where a matching season exists (subquery returns non-NULL)
-    let result = sqlx::query(
-        "UPDATE games
+    // Use SQL to efficiently reassign all matches in one query
+    // For each match, find the season with the latest start_date <= match.submitted_at
+    // Only update matches where a matching season exists (subquery returns non-NULL)
+    let matches_result = sqlx::query(
+        "UPDATE matches
          SET season_id = (
              SELECT s.id
              FROM seasons s
-             WHERE s.start_date <= games.played_at
+             WHERE s.start_date <= matches.submitted_at
              ORDER BY s.start_date DESC
              LIMIT 1
          )
          WHERE EXISTS (
-             SELECT 1 FROM seasons s WHERE s.start_date <= games.played_at
+             SELECT 1 FROM seasons s WHERE s.start_date <= matches.submitted_at
          )
          AND (
              season_id IS NULL
              OR season_id != (
                  SELECT s.id
                  FROM seasons s
-                 WHERE s.start_date <= games.played_at
+                 WHERE s.start_date <= matches.submitted_at
                  ORDER BY s.start_date DESC
                  LIMIT 1
              )
@@ -809,13 +979,27 @@ pub async fn reassign_games_to_seasons(
     .execute(pool)
     .await?;
 
-    let reassigned_count = result.rows_affected() as i32;
+    let matches_reassigned = matches_result.rows_affected() as i32;
+
+    // Now update games to inherit the season_id from their parent match
+    let games_result = sqlx::query(
+        "UPDATE games
+         SET season_id = m.season_id
+         FROM matches m
+         WHERE games.match_id = m.id
+         AND (games.season_id IS NULL OR games.season_id != m.season_id)",
+    )
+    .execute(pool)
+    .await?;
+
+    let games_reassigned = games_result.rows_affected() as i32;
 
     tracing::info!(
-        "Reassigned {} games to their correct seasons",
-        reassigned_count
+        "Reassigned {} matches and {} games to their correct seasons",
+        matches_reassigned,
+        games_reassigned
     );
-    Ok(reassigned_count)
+    Ok(matches_reassigned + games_reassigned)
 }
 
 /// Delete a season and all associated data

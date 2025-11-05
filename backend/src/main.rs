@@ -66,6 +66,62 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })?;
     tracing::info!("Database migrations completed successfully");
 
+    // Check if any admin users exist, create one if not
+    tracing::info!("Checking for admin users...");
+    let admin_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE role = 'admin'")
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to check for admin users: {}", e);
+            e
+        })?;
+
+    if admin_count.0 == 0 {
+        tracing::info!("No admin users found, creating default admin...");
+
+        // Get admin password from environment or use default
+        let admin_password = std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| {
+            tracing::warn!("ADMIN_PASSWORD not set, using default password 'admin'");
+            tracing::warn!("⚠️  SECURITY WARNING: Please change the admin password immediately!");
+            "admin".to_string()
+        });
+
+        // Hash the password
+        use argon2::{
+            Argon2,
+            password_hash::{PasswordHasher, SaltString, rand_core::OsRng},
+        };
+        let salt = SaltString::generate(&mut OsRng);
+        let argon2 = Argon2::default();
+        let password_hash = argon2
+            .hash_password(admin_password.as_bytes(), &salt)
+            .expect("Failed to hash password")
+            .to_string();
+
+        // Create admin user
+        sqlx::query(
+            "INSERT INTO users (username, password_hash, first_name, last_name, role)
+             VALUES ($1, $2, $3, $4, 'admin')",
+        )
+        .bind("admin")
+        .bind(password_hash)
+        .bind("Admin")
+        .bind("User")
+        .execute(&pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to create admin user: {}", e);
+            e
+        })?;
+
+        tracing::info!("✓ Created default admin user (username: admin)");
+        if std::env::var("ADMIN_PASSWORD").is_err() {
+            tracing::warn!("⚠️  Using default password - please change it immediately!");
+        }
+    } else {
+        tracing::info!("✓ Admin user exists");
+    }
+
     tracing::info!("Setting up routes...");
 
     // Auth routes
@@ -98,7 +154,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/profile", get(handlers::user::get_profile))
         .route("/profile", put(handlers::user::update_profile))
         .route("/change-password", post(handlers::user::change_password))
-        .route("/games", post(handlers::games::create_game))
+        .route("/matches", post(handlers::matches::create_match))
         .route_layer(axum::middleware::from_fn_with_state(
             pool.clone(),
             self::middleware::auth::require_auth,
@@ -144,6 +200,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             post(handlers::seasons::recalculate_season),
         )
         .route(
+            "/seasons/{season_id}/elo-version",
+            patch(handlers::seasons::update_season_elo_version),
+        )
+        .route(
             "/seasons/{season_id}",
             delete(handlers::seasons::delete_season),
         )
@@ -164,9 +224,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/seasons/{season_id}/players/remove",
             post(handlers::seasons::remove_player_from_season),
         )
-        // Game management routes
-        .route("/games/{game_id}", delete(handlers::games::delete_game))
-        .route("/games/{game_id}", patch(handlers::games::update_game))
+        // Match management routes
+        .route(
+            "/matches/{match_id}",
+            delete(handlers::matches::delete_match),
+        )
         .route_layer(axum::middleware::from_fn_with_state(
             pool.clone(),
             self::middleware::auth::require_admin,
@@ -191,8 +253,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/seasons/{season_id}/leaderboard",
             get(handlers::seasons::get_season_leaderboard),
         )
-        // Game routes
-        .route("/games", get(handlers::games::list_games));
+        // Match routes
+        .route("/matches", get(handlers::matches::list_matches));
 
     tracing::info!("Routes configured successfully");
 

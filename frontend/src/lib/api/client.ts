@@ -196,6 +196,7 @@ export interface Season {
     base_k_factor: number | null;
     new_player_k_bonus: number | null;
     new_player_bonus_period: number | null;
+    elo_version: string | null;
     is_active: boolean;
     created_at: string;
 }
@@ -209,6 +210,7 @@ export interface CreateSeasonRequest {
     base_k_factor?: number;
     new_player_k_bonus?: number;
     new_player_bonus_period?: number;
+    elo_version?: string; // Optional reference to ELO configuration version
     player_ids?: string[]; // Optional list of player IDs to include in the season
 }
 
@@ -315,6 +317,13 @@ export const adminApi = {
         });
     },
 
+    async updateSeasonEloVersion(seasonId: string, eloVersion: string | null): Promise<Season> {
+        return apiCall<Season>(`/api/admin/seasons/${seasonId}/elo-version`, {
+            method: 'PATCH',
+            body: JSON.stringify({ elo_version: eloVersion }),
+        });
+    },
+
     async deleteSeason(seasonId: string): Promise<{ message: string }> {
         return apiCall<{ message: string }>(`/api/admin/seasons/${seasonId}`, {
             method: 'DELETE',
@@ -397,82 +406,74 @@ export const playersApi = {
     },
 };
 
-// Games API methods (requires authentication)
-export interface CreateGameRequest {
+// Matches API methods (requires authentication for creation)
+export type GameWinner = 'Player1' | 'Player2';
+
+export interface CreateMatchRequest {
     player1_id: string;
     player2_id: string;
-    player1_score: number;
-    player2_score: number;
-    played_at?: string;
+    games: GameWinner[]; // Array of game winners, e.g., ['Player1', 'Player2', 'Player1']
+    submitted_at?: string; // Optional ISO timestamp
 }
 
-export interface Game {
-    id: string;
-    player1_id: string;
-    player2_id: string;
-    player1_score: number;
-    player2_score: number;
-    season_id: string;
+export interface GameDetail {
+    game_number: number;
+    winner: 'Player1' | 'Player2';
+    player1_elo_before: number;
+    player1_elo_after: number;
+    player1_elo_change: number;
+    player2_elo_before: number;
+    player2_elo_after: number;
+    player2_elo_change: number;
     played_at: string;
 }
 
-export interface GameWithDetails {
+export interface MatchWithDetails {
     id: string;
     player1_id: string;
     player1_name: string;
-    player1_score: number;
+    player1_games_won: number;
     player1_elo_before: number;
     player1_elo_after: number;
     player1_elo_change: number;
     player2_id: string;
     player2_name: string;
-    player2_score: number;
+    player2_games_won: number;
     player2_elo_before: number;
     player2_elo_after: number;
     player2_elo_change: number;
     season_id: string;
     season_name: string;
-    played_at: string;
+    total_games: number;
+    submitted_at: string;
+    games: GameDetail[];
 }
 
-export interface ListGamesResponse {
-    games: GameWithDetails[];
+export interface ListMatchesResponse {
+    matches: MatchWithDetails[];
     total: number;
     page: number;
     limit: number;
     total_pages: number;
 }
 
-export interface UpdateGameRequest {
-    player1_score: number;
-    player2_score: number;
-    played_at?: string;
-}
-
-export const gamesApi = {
-    async createGame(data: CreateGameRequest): Promise<{ message: string; game: Game }> {
-        return apiCall<{ message: string; game: Game }>('/api/user/games', {
+export const matchesApi = {
+    async createMatch(data: CreateMatchRequest): Promise<{ message: string; match_data: MatchWithDetails }> {
+        return apiCall<{ message: string; match_data: MatchWithDetails }>('/api/user/matches', {
             method: 'POST',
             body: JSON.stringify(data),
         });
     },
 
-    async listGames(page: number = 1, limit: number = 50): Promise<ListGamesResponse> {
-        return apiCall<ListGamesResponse>(`/api/games?page=${page}&limit=${limit}`, {
+    async listMatches(page: number = 1, limit: number = 50): Promise<ListMatchesResponse> {
+        return apiCall<ListMatchesResponse>(`/api/matches?page=${page}&limit=${limit}`, {
             method: 'GET',
         });
     },
 
-    async deleteGame(gameId: string): Promise<{ message: string }> {
-        return apiCall<{ message: string }>(`/api/admin/games/${gameId}`, {
+    async deleteMatch(matchId: string): Promise<{ message: string }> {
+        return apiCall<{ message: string }>(`/api/admin/matches/${matchId}`, {
             method: 'DELETE',
-        });
-    },
-
-    async updateGame(gameId: string, data: UpdateGameRequest): Promise<{ message: string }> {
-        return apiCall<{ message: string }>(`/api/admin/games/${gameId}`, {
-            method: 'PATCH',
-            body: JSON.stringify(data),
         });
     },
 };
