@@ -59,8 +59,8 @@
 	}
 
 	async function handleDeleteMatch(match: MatchWithDetails) {
-		if (!isAdmin) {
-			showToast('Admin access required', 'error');
+		if (!user) {
+			showToast('You must be logged in to delete matches', 'error');
 			return;
 		}
 
@@ -134,7 +134,7 @@
 			{#if user}
 				<a href="/table-tennis/add-match">ADD MATCH</a>
 			{/if}
-			<a href="/table-tennis">BACK TO LEADERBOARD</a>
+			<a href="/table-tennis">BACK</a>
 		</nav>
 	</header>
 
@@ -202,7 +202,7 @@
 					<div class="match-header">
 						<div class="season-badge">{match.season_name}</div>
 						<div class="date">{formatDate(match.submitted_at)}</div>
-						{#if isAdmin}
+						{#if user}
 							<div class="header-actions">
 								<button
 									class="btn-delete"
@@ -360,6 +360,11 @@
 		text-transform: uppercase;
 		margin: 0;
 		color: var(--text-primary);
+	}
+
+	.nav-links {
+		display: flex;
+		gap: 1.5rem;
 	}
 
 	.nav-links a {

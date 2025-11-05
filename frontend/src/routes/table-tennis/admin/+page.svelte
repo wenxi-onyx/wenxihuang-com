@@ -1,14 +1,19 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { authStore } from '$lib/stores/auth';
 	import { adminApi, type EloConfiguration, type Job } from '$lib/api/client';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+	import LoginButton from '$lib/components/LoginButton.svelte';
 
 	let configs: EloConfiguration[] = [];
 	let loading = true;
 	let error = '';
-	let showCreateForm = false;
+	let showEditModal = false;
 	let editingConfig: EloConfiguration | null = null;
 	let jobStatus: Job | null = null;
 	let jobInterval: number | null = null;
+	let shouldRecalculate = false;
 
 	// Form state
 	let formData = {
@@ -24,6 +29,12 @@
 	let useDynamicK = false;
 
 	onMount(async () => {
+		const currentUser = await authStore.checkAuth();
+		if (!currentUser) {
+			error = 'You must be logged in to access this page';
+			goto('/login');
+			return;
+		}
 		await loadConfigs();
 	});
 
@@ -56,7 +67,8 @@
 		};
 		useDynamicK = false;
 		editingConfig = null;
-		showCreateForm = false;
+		showEditModal = false;
+		shouldRecalculate = false;
 	}
 
 	function startEdit(config: EloConfiguration) {
@@ -71,10 +83,12 @@
 			description: config.description || ''
 		};
 		useDynamicK = config.base_k_factor !== null;
-		showCreateForm = true;
+		shouldRecalculate = false;
+		showEditModal = true;
 	}
 
-	async function handleSubmit() {
+	async function handleSubmit(e: Event) {
+		e.preventDefault();
 		try {
 			const payload = {
 				...formData,
@@ -83,10 +97,27 @@
 				new_player_bonus_period: useDynamicK ? (formData.new_player_bonus_period ?? undefined) : undefined
 			};
 
-			if (editingConfig) {
-				await adminApi.updateEloConfiguration(editingConfig.version_name, payload);
-			} else {
-				await adminApi.createEloConfiguration(payload);
+			// Save the configuration
+			await adminApi.updateEloConfiguration(editingConfig!.version_name, payload);
+
+			// If shouldRecalculate is true, trigger recalculation
+			if (shouldRecalculate) {
+				const response = await adminApi.recalculateElo(editingConfig!.version_name);
+				jobStatus = await adminApi.getJobStatus(response.job_id);
+
+				// Poll job status
+				if (jobInterval) clearInterval(jobInterval);
+				jobInterval = window.setInterval(async () => {
+					try {
+						jobStatus = await adminApi.getJobStatus(response.job_id);
+						if (jobStatus.status === 'completed' || jobStatus.status === 'failed') {
+							if (jobInterval) clearInterval(jobInterval);
+							await loadConfigs();
+						}
+					} catch (e) {
+						console.error('Failed to fetch job status:', e);
+					}
+				}, 2000);
 			}
 
 			await loadConfigs();
@@ -122,32 +153,6 @@
 		}
 	}
 
-	async function handleRecalculate(versionName: string) {
-		if (!confirm(`Recalculate all ELO ratings using "${versionName}"? This may take a while.`)) {
-			return;
-		}
-
-		try {
-			const response = await adminApi.recalculateElo(versionName);
-			jobStatus = await adminApi.getJobStatus(response.job_id);
-
-			// Poll job status
-			if (jobInterval) clearInterval(jobInterval);
-			jobInterval = window.setInterval(async () => {
-				try {
-					jobStatus = await adminApi.getJobStatus(response.job_id);
-					if (jobStatus.status === 'completed' || jobStatus.status === 'failed') {
-						if (jobInterval) clearInterval(jobInterval);
-						await loadConfigs();
-					}
-				} catch (e) {
-					console.error('Failed to fetch job status:', e);
-				}
-			}, 2000);
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to start recalculation';
-		}
-	}
 
 	$: if (useDynamicK && formData.base_k_factor === null) {
 		formData.base_k_factor = formData.k_factor;
@@ -160,17 +165,21 @@
 	<title>ELO Algorithm Configurator</title>
 </svelte:head>
 
+<ThemeToggle />
+<LoginButton />
+
 <div class="container">
-	<div class="header-section">
-		<a href="/table-tennis" class="btn-back">← Back to Leaderboard</a>
+	<header class="page-header">
 		<h1>ELO Algorithm Configurator</h1>
-		<p class="subtitle">Manage ELO rating system configurations and recalculations</p>
-	</div>
+		<nav class="nav-links">
+			<a href="/table-tennis">BACK</a>
+		</nav>
+	</header>
 
 	{#if error}
 		<div class="alert alert-error">
 			{error}
-			<button class="btn-close" on:click={() => error = ''}>×</button>
+			<button class="btn-close" onclick={() => error = ''}>×</button>
 		</div>
 	{/if}
 
@@ -178,7 +187,7 @@
 		<div class="job-status" class:completed={jobStatus.status === 'completed'} class:failed={jobStatus.status === 'failed'}>
 			<div class="job-header">
 				<h3>Recalculation {jobStatus.status === 'completed' ? 'Completed' : jobStatus.status === 'failed' ? 'Failed' : 'In Progress'}</h3>
-				<button class="btn-close" on:click={() => jobStatus = null}>×</button>
+				<button class="btn-close" onclick={() => jobStatus = null}>×</button>
 			</div>
 			{#if jobStatus.status === 'running' || jobStatus.status === 'pending'}
 				<div class="progress-bar">
@@ -190,138 +199,6 @@
 			{:else}
 				<p class="error-text">Recalculation failed. Please check the logs.</p>
 			{/if}
-		</div>
-	{/if}
-
-	<div class="action-bar">
-		{#if !showCreateForm}
-			<button class="btn btn-primary" on:click={() => showCreateForm = true}>
-				+ New Configuration
-			</button>
-		{/if}
-	</div>
-
-	{#if showCreateForm}
-		<div class="form-card">
-			<h2>{editingConfig ? 'Edit' : 'Create'} Configuration</h2>
-			<form on:submit|preventDefault={handleSubmit}>
-				<div class="form-group">
-					<label for="version_name">Version Name</label>
-					<input
-						type="text"
-						id="version_name"
-						bind:value={formData.version_name}
-						disabled={!!editingConfig}
-						required
-						placeholder="e.g., v1, v2, experimental"
-					/>
-				</div>
-
-				<div class="form-row">
-					<div class="form-group">
-						<label for="k_factor">K-Factor</label>
-						<input
-							type="number"
-							id="k_factor"
-							bind:value={formData.k_factor}
-							min="1"
-							max="200"
-							step="0.1"
-							required
-						/>
-						<p class="help-text">Rating volatility (higher = more volatile)</p>
-					</div>
-
-					<div class="form-group">
-						<label for="starting_elo">Starting ELO</label>
-						<input
-							type="number"
-							id="starting_elo"
-							bind:value={formData.starting_elo}
-							min="0"
-							step="1"
-							required
-						/>
-						<p class="help-text">Initial rating for new players</p>
-					</div>
-				</div>
-
-				<div class="form-group">
-					<label class="checkbox-label">
-						<input type="checkbox" bind:checked={useDynamicK} />
-						<span>Use Dynamic K-Factor</span>
-					</label>
-					<p class="help-text">Adjust K-factor based on player experience</p>
-				</div>
-
-				{#if useDynamicK}
-					<div class="dynamic-k-section">
-						<h3>Dynamic K-Factor Settings</h3>
-						<p class="section-description">
-							Formula: K = Base K + (Bonus × e^(-games / period))
-						</p>
-
-						<div class="form-row">
-							<div class="form-group">
-								<label for="base_k">Base K-Factor</label>
-								<input
-									type="number"
-									id="base_k"
-									bind:value={formData.base_k_factor}
-									min="1"
-									max="200"
-									step="0.1"
-									required
-								/>
-							</div>
-
-							<div class="form-group">
-								<label for="k_bonus">New Player K Bonus</label>
-								<input
-									type="number"
-									id="k_bonus"
-									bind:value={formData.new_player_k_bonus}
-									min="0"
-									max="200"
-									step="0.1"
-									required
-								/>
-							</div>
-
-							<div class="form-group">
-								<label for="bonus_period">Bonus Period (games)</label>
-								<input
-									type="number"
-									id="bonus_period"
-									bind:value={formData.new_player_bonus_period}
-									min="1"
-									step="1"
-									required
-								/>
-							</div>
-						</div>
-					</div>
-				{/if}
-
-				<div class="form-group">
-					<label for="description">Description (optional)</label>
-					<textarea
-						id="description"
-						bind:value={formData.description}
-						rows="3"
-						placeholder="Describe this configuration..."
-					></textarea>
-				</div>
-
-				<div class="form-actions">
-					<button type="submit" class="btn btn-primary">
-						{editingConfig ? 'Update' : 'Create'} Configuration
-					</button>
-					<button type="button" class="btn btn-secondary" on:click={resetForm}>
-						Cancel
-					</button>
-				</div>
-			</form>
 		</div>
 	{/if}
 
@@ -379,19 +256,16 @@
 					</div>
 
 					<div class="config-actions">
-						{#if !config.is_active}
-							<button class="btn btn-sm btn-success" on:click={() => handleActivate(config.version_name)}>
-								Activate
-							</button>
-						{/if}
-						<button class="btn btn-sm btn-primary" on:click={() => handleRecalculate(config.version_name)}>
-							Recalculate
-						</button>
-						<button class="btn btn-sm btn-secondary" on:click={() => startEdit(config)}>
+						<button class="btn btn-sm btn-primary" onclick={() => startEdit(config)}>
 							Edit
 						</button>
 						{#if !config.is_active}
-							<button class="btn btn-sm btn-danger" on:click={() => handleDelete(config.version_name)}>
+							<button class="btn btn-sm btn-success" onclick={() => handleActivate(config.version_name)}>
+								Activate
+							</button>
+						{/if}
+						{#if !config.is_active}
+							<button class="btn btn-sm btn-danger" onclick={() => handleDelete(config.version_name)}>
 								Delete
 							</button>
 						{/if}
@@ -402,66 +276,201 @@
 	{/if}
 </div>
 
+<!-- Edit Modal -->
+{#if showEditModal && editingConfig}
+	<div class="modal-backdrop" onclick={resetForm}>
+		<div class="modal" onclick={(e) => e.stopPropagation()}>
+			<div class="modal-header">
+				<h2>Edit Configuration: {editingConfig.version_name}</h2>
+				<button class="btn-close" onclick={resetForm}>×</button>
+			</div>
+
+			<form onsubmit={handleSubmit}>
+				<div class="modal-body">
+					<div class="form-row">
+						<div class="form-group">
+							<label for="k_factor">K-Factor</label>
+							<input
+								type="number"
+								id="k_factor"
+								bind:value={formData.k_factor}
+								min="1"
+								max="200"
+								step="0.1"
+								required
+							/>
+							<p class="help-text">Rating volatility (higher = more volatile)</p>
+						</div>
+
+						<div class="form-group">
+							<label for="starting_elo">Starting ELO</label>
+							<input
+								type="number"
+								id="starting_elo"
+								bind:value={formData.starting_elo}
+								min="0"
+								step="1"
+								required
+							/>
+							<p class="help-text">Initial rating for new players</p>
+						</div>
+					</div>
+
+					<div class="form-group">
+						<label class="checkbox-label">
+							<input type="checkbox" bind:checked={useDynamicK} />
+							<span>Use Dynamic K-Factor</span>
+						</label>
+						<p class="help-text">Adjust K-factor based on player experience</p>
+					</div>
+
+					{#if useDynamicK}
+						<div class="dynamic-k-section">
+							<h3>Dynamic K-Factor Settings</h3>
+							<p class="section-description">
+								Formula: K = Base K + (Bonus × e^(-games / period))
+							</p>
+
+							<div class="form-row">
+								<div class="form-group">
+									<label for="base_k">Base K-Factor</label>
+									<input
+										type="number"
+										id="base_k"
+										bind:value={formData.base_k_factor}
+										min="1"
+										max="200"
+										step="0.1"
+										required
+									/>
+								</div>
+
+								<div class="form-group">
+									<label for="k_bonus">New Player K Bonus</label>
+									<input
+										type="number"
+										id="k_bonus"
+										bind:value={formData.new_player_k_bonus}
+										min="0"
+										max="200"
+										step="0.1"
+										required
+									/>
+								</div>
+
+								<div class="form-group">
+									<label for="bonus_period">Bonus Period (games)</label>
+									<input
+										type="number"
+										id="bonus_period"
+										bind:value={formData.new_player_bonus_period}
+										min="1"
+										step="1"
+										required
+									/>
+								</div>
+							</div>
+						</div>
+					{/if}
+
+					<div class="form-group">
+						<label for="description">Description (optional)</label>
+						<textarea
+							id="description"
+							bind:value={formData.description}
+							rows="3"
+							placeholder="Describe this configuration..."
+						></textarea>
+					</div>
+
+					<div class="form-group">
+						<label class="checkbox-label recalculate-checkbox">
+							<input type="checkbox" bind:checked={shouldRecalculate} />
+							<span>Recalculate all ELO ratings after saving</span>
+						</label>
+						<p class="help-text">This will recalculate ELO ratings for ALL matches across ALL time using this configuration. Every game will be reprocessed in chronological order. This may take a few moments.</p>
+					</div>
+				</div>
+
+				<div class="modal-actions">
+					<button type="button" class="btn btn-secondary" onclick={resetForm}>
+						Cancel
+					</button>
+					<button type="submit" class="btn btn-primary">
+						{shouldRecalculate ? 'Save & Recalculate' : 'Save Changes'}
+					</button>
+				</div>
+			</form>
+		</div>
+	</div>
+{/if}
+
 <style>
 	.container {
-		max-width: 1400px;
+		max-width: 1200px;
 		margin: 0 auto;
-		padding: 2rem;
+		padding: 6rem 2rem 4rem 2rem;
 	}
 
-	.header-section {
+	.page-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
 		margin-bottom: 3rem;
-	}
-
-	.btn-back {
-		display: inline-block;
-		margin-bottom: 1rem;
-		padding: 0.5rem 1rem;
-		font-size: 0.95rem;
-		color: var(--text-secondary, #666);
-		text-decoration: none;
-		border: 1px solid var(--border-color, #e5e7eb);
-		border-radius: 6px;
-		transition: all 0.2s;
-	}
-
-	.btn-back:hover {
-		background: var(--bg-secondary, #f9fafb);
-		border-color: var(--accent-color, #3b82f6);
-		color: var(--accent-color, #3b82f6);
+		padding-bottom: 1rem;
+		border-bottom: 1px solid var(--border-subtle);
 	}
 
 	h1 {
-		font-size: 2.5rem;
-		font-weight: 700;
-		margin-bottom: 0.5rem;
-		color: var(--text-primary, #1a1a1a);
+		font-size: clamp(1.5rem, 4vw, 2.5rem);
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		margin: 0;
+		color: var(--text-primary);
 	}
 
-	.subtitle {
-		font-size: 1.1rem;
-		color: var(--text-secondary, #666);
+	.nav-links {
+		display: flex;
+		gap: 1.5rem;
+	}
+
+	.nav-links a {
+		font-size: 0.875rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		text-decoration: none;
+		color: inherit;
+		opacity: 0.7;
+		transition: opacity 0.2s ease;
+	}
+
+	.nav-links a:hover {
+		opacity: 1;
 	}
 
 	.alert {
 		padding: 1rem 1.5rem;
-		border-radius: 8px;
-		margin-bottom: 1.5rem;
+		margin-bottom: 2rem;
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
+		border: 1px solid var(--border-subtle);
+		background: transparent;
 	}
 
 	.alert-error {
-		background: #fef2f2;
-		color: #991b1b;
-		border: 1px solid #fee2e2;
+		border-color: rgba(255, 100, 100, 0.3);
+		color: var(--text-primary);
+		opacity: 0.9;
 	}
 
 	.btn-close {
 		background: none;
 		border: none;
 		font-size: 1.5rem;
+		font-weight: 300;
 		cursor: pointer;
 		padding: 0;
 		width: 2rem;
@@ -471,6 +480,7 @@
 		justify-content: center;
 		color: inherit;
 		opacity: 0.6;
+		transition: opacity 0.2s ease;
 	}
 
 	.btn-close:hover {
@@ -478,21 +488,18 @@
 	}
 
 	.job-status {
-		background: #dbeafe;
-		border: 1px solid #93c5fd;
+		background: transparent;
+		border: 1px solid var(--border-subtle);
 		padding: 1.5rem;
-		border-radius: 12px;
-		margin-bottom: 1.5rem;
+		margin-bottom: 2rem;
 	}
 
 	.job-status.completed {
-		background: #d1fae5;
-		border-color: #6ee7b7;
+		border-color: rgba(100, 255, 100, 0.3);
 	}
 
 	.job-status.failed {
-		background: #fef2f2;
-		border-color: #fecaca;
+		border-color: rgba(255, 100, 100, 0.3);
 	}
 
 	.job-header {
@@ -504,40 +511,48 @@
 
 	.job-header h3 {
 		margin: 0;
-		font-size: 1.25rem;
-		font-weight: 600;
+		font-size: 0.875rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--text-primary);
 	}
 
 	.progress-bar {
 		width: 100%;
-		height: 8px;
-		background: rgba(255, 255, 255, 0.5);
-		border-radius: 4px;
+		height: 1px;
+		background: var(--border-subtle);
 		overflow: hidden;
-		margin-bottom: 0.5rem;
+		margin-bottom: 1rem;
 	}
 
 	.progress-fill {
 		height: 100%;
-		background: #3b82f6;
+		background: var(--text-primary);
+		opacity: 0.5;
 		transition: width 0.3s ease;
 	}
 
 	.progress-text {
-		font-size: 0.9rem;
+		font-size: 0.875rem;
+		font-weight: 300;
+		color: var(--text-primary);
+		opacity: 0.7;
 		margin: 0.5rem 0 0;
 	}
 
 	.success {
-		color: #16a34a;
-		font-weight: 600;
+		color: rgba(100, 255, 100, 0.8);
+		font-weight: 300;
 		margin: 0;
+		font-size: 0.875rem;
 	}
 
 	.error-text {
-		color: #dc2626;
-		font-weight: 600;
+		color: rgba(255, 100, 100, 0.8);
+		font-weight: 300;
 		margin: 0;
+		font-size: 0.875rem;
 	}
 
 	.action-bar {
@@ -548,69 +563,89 @@
 
 	.btn {
 		padding: 0.75rem 1.5rem;
-		font-size: 1rem;
-		font-weight: 500;
-		border-radius: 8px;
-		border: none;
+		font-size: 0.75rem;
+		font-weight: 300;
+		font-family: inherit;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		border: 1px solid var(--border-subtle);
+		background: transparent;
+		color: var(--text-primary);
 		cursor: pointer;
-		transition: all 0.2s;
+		transition: all 0.2s ease;
+	}
+
+	.btn:hover {
+		border-color: var(--border-active);
+		opacity: 0.8;
 	}
 
 	.btn-primary {
-		background: var(--accent-color, #3b82f6);
-		color: white;
+		border-color: var(--border-subtle);
+		background: transparent;
+		color: var(--text-primary);
 	}
 
 	.btn-primary:hover {
-		background: #2563eb;
+		border-color: var(--border-active);
+		opacity: 0.8;
 	}
 
 	.btn-secondary {
-		background: var(--bg-secondary, #f9fafb);
-		color: var(--text-primary, #1a1a1a);
-		border: 1px solid var(--border-color, #e5e7eb);
+		border-color: var(--border-subtle);
+		background: transparent;
+		color: var(--text-primary);
+		opacity: 0.6;
 	}
 
 	.btn-secondary:hover {
-		background: #f3f4f6;
+		border-color: var(--border-active);
+		opacity: 0.8;
 	}
 
 	.btn-success {
-		background: #16a34a;
-		color: white;
+		border-color: rgba(100, 255, 100, 0.3);
+		background: transparent;
+		color: rgba(100, 255, 100, 0.8);
 	}
 
 	.btn-success:hover {
-		background: #15803d;
+		border-color: rgba(100, 255, 100, 0.5);
+		opacity: 0.9;
 	}
 
 	.btn-danger {
-		background: #dc2626;
-		color: white;
+		border-color: rgba(255, 100, 100, 0.3);
+		background: transparent;
+		color: rgba(255, 100, 100, 0.8);
 	}
 
 	.btn-danger:hover {
-		background: #b91c1c;
+		border-color: rgba(255, 100, 100, 0.5);
+		opacity: 0.9;
 	}
 
 	.btn-sm {
 		padding: 0.5rem 1rem;
-		font-size: 0.875rem;
+		font-size: 0.75rem;
 	}
 
 	.form-card {
-		background: var(--bg-primary, white);
-		border: 1px solid var(--border-color, #e5e7eb);
-		border-radius: 12px;
+		background: transparent;
+		border: 1px solid var(--border-subtle);
 		padding: 2rem;
 		margin-bottom: 2rem;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 	}
 
 	.form-card h2 {
-		margin: 0 0 1.5rem;
-		font-size: 1.5rem;
-		font-weight: 600;
+		margin: 0 0 2rem;
+		padding-bottom: 1rem;
+		border-bottom: 1px solid var(--border-subtle);
+		font-size: 0.875rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--text-primary);
 	}
 
 	.form-group {
@@ -626,8 +661,12 @@
 	label {
 		display: block;
 		margin-bottom: 0.5rem;
-		font-weight: 500;
-		color: var(--text-primary, #1a1a1a);
+		font-size: 0.75rem;
+		font-weight: 300;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		color: var(--text-primary);
+		opacity: 0.7;
 	}
 
 	input[type="text"],
@@ -635,35 +674,47 @@
 	textarea {
 		width: 100%;
 		padding: 0.75rem;
-		font-size: 1rem;
-		border: 1px solid var(--border-color, #e5e7eb);
-		border-radius: 6px;
-		background: var(--bg-primary, white);
-		color: var(--text-primary, #1a1a1a);
+		font-size: 0.875rem;
+		font-family: inherit;
+		font-weight: 300;
+		border: 1px solid var(--border-subtle);
+		background: transparent;
+		color: var(--text-primary);
+		transition: border-color 0.2s ease;
 	}
 
 	input:focus,
 	textarea:focus {
 		outline: none;
-		border-color: var(--accent-color, #3b82f6);
+		border-color: var(--border-active);
 	}
 
 	input:disabled {
-		background: var(--bg-secondary, #f9fafb);
+		opacity: 0.5;
 		cursor: not-allowed;
 	}
 
+	textarea {
+		resize: vertical;
+		min-height: 80px;
+	}
+
 	.help-text {
-		margin: 0.25rem 0 0;
-		font-size: 0.875rem;
-		color: var(--text-secondary, #666);
+		margin: 0.5rem 0 0;
+		font-size: 0.75rem;
+		font-weight: 300;
+		color: var(--text-primary);
+		opacity: 0.5;
+		font-style: italic;
 	}
 
 	.checkbox-label {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.75rem;
 		cursor: pointer;
+		font-size: 0.875rem;
+		font-weight: 300;
 	}
 
 	.checkbox-label input[type="checkbox"] {
@@ -671,21 +722,29 @@
 	}
 
 	.dynamic-k-section {
-		background: var(--bg-secondary, #f9fafb);
+		background: transparent;
+		border: 1px solid var(--border-subtle);
 		padding: 1.5rem;
-		border-radius: 8px;
 		margin-bottom: 1.5rem;
 	}
 
 	.dynamic-k-section h3 {
-		margin: 0 0 0.5rem;
-		font-size: 1.25rem;
+		margin: 0 0 1rem;
+		padding-bottom: 1rem;
+		border-bottom: 1px solid var(--border-subtle);
+		font-size: 0.75rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--text-primary);
 	}
 
 	.section-description {
-		margin: 0 0 1rem;
-		font-size: 0.95rem;
-		color: var(--text-secondary, #666);
+		margin: 0 0 1.5rem;
+		font-size: 0.75rem;
+		font-weight: 300;
+		color: var(--text-primary);
+		opacity: 0.6;
 		font-family: monospace;
 	}
 
@@ -694,14 +753,18 @@
 		gap: 1rem;
 		justify-content: flex-end;
 		margin-top: 2rem;
+		padding-top: 2rem;
+		border-top: 1px solid var(--border-subtle);
 	}
 
 	.loading,
 	.empty-state {
 		text-align: center;
 		padding: 3rem;
-		font-size: 1.2rem;
-		color: var(--text-secondary, #666);
+		font-size: 0.875rem;
+		font-weight: 300;
+		color: var(--text-primary);
+		opacity: 0.7;
 	}
 
 	.configs-grid {
@@ -711,42 +774,44 @@
 	}
 
 	.config-card {
-		background: var(--bg-primary, white);
-		border: 2px solid var(--border-color, #e5e7eb);
-		border-radius: 12px;
+		background: transparent;
+		border: 1px solid var(--border-subtle);
 		padding: 1.5rem;
 		position: relative;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-		transition: all 0.2s;
+		transition: border-color 0.2s ease;
 	}
 
 	.config-card:hover {
-		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+		border-color: var(--border-active);
 	}
 
 	.config-card.active {
-		border-color: #16a34a;
-		background: linear-gradient(to bottom, #f0fdf4, white);
+		border-color: rgba(100, 255, 100, 0.3);
 	}
 
 	.active-badge {
 		position: absolute;
 		top: 1rem;
 		right: 1rem;
-		background: #16a34a;
-		color: white;
+		border: 1px solid rgba(100, 255, 100, 0.3);
+		background: transparent;
+		color: rgba(100, 255, 100, 0.8);
 		padding: 0.25rem 0.75rem;
-		border-radius: 6px;
-		font-size: 0.75rem;
-		font-weight: 600;
+		font-size: 0.625rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
 		text-transform: uppercase;
 	}
 
 	.config-title {
-		font-size: 1.5rem;
-		font-weight: 700;
-		margin: 0 0 1rem;
-		color: var(--text-primary, #1a1a1a);
+		font-size: 1.125rem;
+		font-weight: 300;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		margin: 0 0 1.5rem;
+		padding-bottom: 1rem;
+		border-bottom: 1px solid var(--border-subtle);
+		color: var(--text-primary);
 	}
 
 	.config-details {
@@ -756,8 +821,8 @@
 	.detail-row {
 		display: flex;
 		justify-content: space-between;
-		padding: 0.5rem 0;
-		border-bottom: 1px solid var(--border-color, #f3f4f6);
+		padding: 0.75rem 0;
+		border-bottom: 1px solid var(--border-subtle);
 	}
 
 	.detail-row:last-child {
@@ -765,56 +830,165 @@
 	}
 
 	.label {
-		font-weight: 500;
-		color: var(--text-secondary, #666);
+		font-size: 0.75rem;
+		font-weight: 300;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		color: var(--text-primary);
+		opacity: 0.6;
 	}
 
 	.value {
-		font-weight: 600;
-		color: var(--text-primary, #1a1a1a);
+		font-size: 0.875rem;
+		font-weight: 300;
+		color: var(--text-primary);
 	}
 
 	.detail-section {
 		margin-top: 1rem;
 		padding-top: 1rem;
-		border-top: 2px solid var(--border-color, #e5e7eb);
+		border-top: 1px solid var(--border-subtle);
 	}
 
 	.detail-section h4 {
-		font-size: 0.95rem;
-		font-weight: 600;
-		margin: 0 0 0.75rem;
-		color: var(--accent-color, #3b82f6);
+		font-size: 0.75rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		margin: 0 0 1rem;
+		padding-bottom: 0.75rem;
+		border-bottom: 1px solid var(--border-subtle);
+		color: var(--text-primary);
+		opacity: 0.8;
 	}
 
 	.config-description {
 		margin: 1rem 0 0;
-		padding: 0.75rem;
-		background: var(--bg-secondary, #f9fafb);
-		border-radius: 6px;
-		font-size: 0.9rem;
-		color: var(--text-secondary, #666);
+		padding: 1rem;
+		border: 1px solid var(--border-subtle);
+		background: transparent;
+		font-size: 0.75rem;
+		font-weight: 300;
+		color: var(--text-primary);
+		opacity: 0.7;
+		font-style: italic;
 	}
 
 	.config-date {
 		margin: 1rem 0 0;
-		font-size: 0.85rem;
-		color: var(--text-secondary, #999);
+		font-size: 0.75rem;
+		font-weight: 300;
+		color: var(--text-primary);
+		opacity: 0.5;
 	}
 
 	.config-actions {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.5rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--border-subtle);
+	}
+
+	/* Modal Styles */
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.6);
+		backdrop-filter: blur(4px);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 10000;
+		animation: fadeIn 0.2s ease-out;
+	}
+
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+
+	.modal {
+		background: var(--bg-primary);
+		border: 1px solid var(--border-subtle);
+		max-width: 700px;
+		width: calc(100% - 2rem);
+		margin: 1rem;
+		max-height: 90vh;
+		overflow-y: auto;
+		animation: slideUp 0.3s ease-out;
+	}
+
+	@keyframes slideUp {
+		from {
+			transform: translateY(20px);
+			opacity: 0;
+		}
+		to {
+			transform: translateY(0);
+			opacity: 1;
+		}
+	}
+
+	.modal-header {
+		padding: 1.5rem;
+		border-bottom: 1px solid var(--border-subtle);
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.modal-header h2 {
+		font-size: 0.875rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		margin: 0;
+		color: var(--text-primary);
+	}
+
+	.modal-body {
+		padding: 2rem;
+	}
+
+	.modal-actions {
+		padding: 1.5rem;
+		border-top: 1px solid var(--border-subtle);
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.75rem;
+	}
+
+	.recalculate-checkbox {
+		padding: 1rem;
+		border: 1px solid var(--border-subtle);
+		margin-top: 1rem;
+	}
+
+	.recalculate-checkbox span {
+		font-weight: 300;
+		color: var(--text-primary);
 	}
 
 	@media (max-width: 768px) {
 		.container {
-			padding: 1rem;
+			padding: 5rem 1rem 3rem 1rem;
 		}
 
-		h1 {
-			font-size: 2rem;
+		.page-header {
+			flex-direction: column;
+			gap: 1rem;
+			align-items: flex-start;
+		}
+
+		.nav-links {
+			flex-direction: column;
+			gap: 0.75rem;
+			width: 100%;
 		}
 
 		.configs-grid {
@@ -823,6 +997,26 @@
 
 		.form-row {
 			grid-template-columns: 1fr;
+		}
+
+		.form-actions,
+		.modal-actions {
+			flex-direction: column;
+		}
+
+		.config-actions {
+			flex-direction: column;
+		}
+
+		.btn {
+			width: 100%;
+		}
+
+		.modal {
+			max-width: none;
+			max-height: 100vh;
+			margin: 0;
+			width: 100%;
 		}
 	}
 </style>

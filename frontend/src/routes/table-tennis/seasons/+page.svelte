@@ -40,10 +40,10 @@
 		const currentUser = await authStore.checkAuth();
 		authChecked = true;
 
-		// Check if user is admin
-		if (!currentUser || currentUser.role !== 'admin') {
-			showToast('Admin access required', 'error');
-			goto('/table-tennis');
+		// Check if user is authenticated
+		if (!currentUser) {
+			showToast('You must be logged in to access this page', 'error');
+			goto('/login');
 			return;
 		}
 

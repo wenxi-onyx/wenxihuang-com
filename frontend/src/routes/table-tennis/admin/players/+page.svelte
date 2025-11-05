@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { authStore } from '$lib/stores/auth';
 	import { playersApi, adminApi, type PlayerWithStats } from '$lib/api/client';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+	import LoginButton from '$lib/components/LoginButton.svelte';
+	import Toast, { showToast } from '$lib/components/Toast.svelte';
 
 	let players: PlayerWithStats[] = [];
 	let filteredPlayers: PlayerWithStats[] = [];
@@ -12,6 +17,12 @@
 	let sortDirection: 'asc' | 'desc' = 'desc';
 
 	onMount(async () => {
+		const currentUser = await authStore.checkAuth();
+		if (!currentUser) {
+			showToast('You must be logged in to access this page', 'error');
+			goto('/login');
+			return;
+		}
 		await loadPlayers();
 	});
 
@@ -21,7 +32,7 @@
 			players = await playersApi.listPlayers();
 			loading = false;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load players';
+			showToast(e instanceof Error ? e.message : 'Failed to load players', 'error');
 			loading = false;
 		}
 	}
@@ -63,9 +74,10 @@
 
 		try {
 			await adminApi.togglePlayerActive(playerId);
+			showToast(`Player ${action}d successfully`, 'success');
 			await loadPlayers();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to update player status';
+			showToast(e instanceof Error ? e.message : 'Failed to update player status', 'error');
 		}
 	}
 
@@ -91,36 +103,27 @@
 	<title>Player Management</title>
 </svelte:head>
 
-<div class="container">
-	<div class="header-section">
-		<a href="/table-tennis/admin" class="btn-back">← Back to Configurator</a>
-		<h1>Player Management</h1>
-		<p class="subtitle">Manage player active status and view statistics</p>
-	</div>
+<ThemeToggle />
+<LoginButton />
+<Toast />
 
-	{#if error}
-		<div class="alert alert-error">
-			{error}
-			<button class="btn-close" on:click={() => error = ''}>×</button>
-		</div>
-	{/if}
+<div class="container">
+	<header class="page-header">
+		<h1>Player Management</h1>
+		<nav class="nav-links">
+			<a href="/table-tennis/seasons">SEASONS</a>
+			<a href="/table-tennis/admin">ELO ALGORITHMS</a>
+			<a href="/table-tennis">BACK</a>
+		</nav>
+	</header>
 
 	{#if loading}
 		<div class="loading">Loading players...</div>
 	{:else}
-		<div class="stats-bar">
-			<div class="stat-card">
-				<div class="stat-value">{players.length}</div>
-				<div class="stat-label">Total Players</div>
-			</div>
-			<div class="stat-card active">
-				<div class="stat-value">{activeCount}</div>
-				<div class="stat-label">Active</div>
-			</div>
-			<div class="stat-card inactive">
-				<div class="stat-value">{inactiveCount}</div>
-				<div class="stat-label">Inactive</div>
-			</div>
+		<div class="stats-summary">
+			<span class="stat">{players.length} Total</span>
+			<span class="stat">{activeCount} Active</span>
+			<span class="stat">{inactiveCount} Inactive</span>
 		</div>
 
 		<div class="controls">
@@ -135,23 +138,23 @@
 				<button
 					class="filter-btn"
 					class:active={filterStatus === 'all'}
-					on:click={() => filterStatus = 'all'}
+					onclick={() => filterStatus = 'all'}
 				>
-					All
+					ALL
 				</button>
 				<button
 					class="filter-btn"
 					class:active={filterStatus === 'active'}
-					on:click={() => filterStatus = 'active'}
+					onclick={() => filterStatus = 'active'}
 				>
-					Active
+					ACTIVE
 				</button>
 				<button
 					class="filter-btn"
 					class:active={filterStatus === 'inactive'}
-					on:click={() => filterStatus = 'inactive'}
+					onclick={() => filterStatus = 'inactive'}
 				>
-					Inactive
+					INACTIVE
 				</button>
 			</div>
 		</div>
@@ -160,13 +163,13 @@
 			<table class="players-table">
 				<thead>
 					<tr>
-						<th class="sortable" on:click={() => handleSort('name')}>
+						<th class="sortable" onclick={() => handleSort('name')}>
 							Player {sortField === 'name' ? (sortDirection === 'desc' ? '▼' : '▲') : ''}
 						</th>
-						<th class="sortable" on:click={() => handleSort('current_elo')}>
+						<th class="sortable" onclick={() => handleSort('current_elo')}>
 							ELO Rating {sortField === 'current_elo' ? (sortDirection === 'desc' ? '▼' : '▲') : ''}
 						</th>
-						<th class="sortable" on:click={() => handleSort('games_played')}>
+						<th class="sortable" onclick={() => handleSort('games_played')}>
 							Games {sortField === 'games_played' ? (sortDirection === 'desc' ? '▼' : '▲') : ''}
 						</th>
 						<th>Wins / Losses</th>
@@ -194,20 +197,18 @@
 							</td>
 							<td class="win-rate">{getWinRate(player)}%</td>
 							<td>
-								<span class="status-badge" class:active={player.is_active} class:inactive={!player.is_active}>
-									{player.is_active ? 'Active' : 'Inactive'}
+								<span class="status-badge" class:active={player.is_active}>
+									{player.is_active ? 'ACTIVE' : 'INACTIVE'}
 								</span>
 							</td>
 							<td class="actions-cell">
 								<button
-									class="btn btn-sm"
-									class:btn-warning={player.is_active}
-									class:btn-success={!player.is_active}
-									on:click={() => handleToggleActive(player.id, player.is_active)}
+									class="btn-action"
+									onclick={() => handleToggleActive(player.id, player.is_active)}
 								>
-									{player.is_active ? 'Deactivate' : 'Activate'}
+									{player.is_active ? 'DEACTIVATE' : 'ACTIVATE'}
 								</button>
-								<a href="/table-tennis/players/{player.id}" class="btn btn-sm btn-secondary">
+								<a href="/table-tennis/players/{player.id}" class="btn-view">
 									View History
 								</a>
 							</td>
@@ -231,124 +232,67 @@
 
 <style>
 	.container {
-		max-width: 1400px;
+		max-width: 1200px;
 		margin: 0 auto;
-		padding: 2rem;
+		padding: 6rem 2rem 4rem 2rem;
 	}
 
-	.header-section {
-		margin-bottom: 3rem;
-	}
-
-	.btn-back {
-		display: inline-block;
-		margin-bottom: 1rem;
-		padding: 0.5rem 1rem;
-		font-size: 0.95rem;
-		color: var(--text-secondary, #666);
-		text-decoration: none;
-		border: 1px solid var(--border-color, #e5e7eb);
-		border-radius: 6px;
-		transition: all 0.2s;
-	}
-
-	.btn-back:hover {
-		background: var(--bg-secondary, #f9fafb);
-		border-color: var(--accent-color, #3b82f6);
-		color: var(--accent-color, #3b82f6);
-	}
-
-	h1 {
-		font-size: 2.5rem;
-		font-weight: 700;
-		margin-bottom: 0.5rem;
-		color: var(--text-primary, #1a1a1a);
-	}
-
-	.subtitle {
-		font-size: 1.1rem;
-		color: var(--text-secondary, #666);
-	}
-
-	.alert {
-		padding: 1rem 1.5rem;
-		border-radius: 8px;
-		margin-bottom: 1.5rem;
+	.page-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
+		margin-bottom: 3rem;
+		padding-bottom: 1rem;
+		border-bottom: 1px solid var(--border-subtle);
 	}
 
-	.alert-error {
-		background: #fef2f2;
-		color: #991b1b;
-		border: 1px solid #fee2e2;
+	h1 {
+		font-size: clamp(1.5rem, 4vw, 2.5rem);
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		margin: 0;
+		color: var(--text-primary);
 	}
 
-	.btn-close {
-		background: none;
-		border: none;
-		font-size: 1.5rem;
-		cursor: pointer;
-		padding: 0;
-		width: 2rem;
-		height: 2rem;
+	.nav-links {
 		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: inherit;
-		opacity: 0.6;
+		gap: 1.5rem;
 	}
 
-	.btn-close:hover {
+	.nav-links a {
+		font-size: 0.875rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		text-decoration: none;
+		color: var(--text-primary);
+		opacity: 0.7;
+		transition: opacity 0.2s ease;
+	}
+
+	.nav-links a:hover {
 		opacity: 1;
 	}
 
 	.loading {
 		text-align: center;
 		padding: 3rem;
-		font-size: 1.2rem;
-		color: var(--text-secondary, #666);
-	}
-
-	.stats-bar {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: 1.5rem;
-		margin-bottom: 2rem;
-	}
-
-	.stat-card {
-		background: var(--bg-primary, white);
-		border: 2px solid var(--border-color, #e5e7eb);
-		border-radius: 12px;
-		padding: 1.5rem;
-		text-align: center;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-	}
-
-	.stat-card.active {
-		border-color: #16a34a;
-		background: linear-gradient(to bottom, #f0fdf4, white);
-	}
-
-	.stat-card.inactive {
-		border-color: #d97706;
-		background: linear-gradient(to bottom, #fffbeb, white);
-	}
-
-	.stat-value {
-		font-size: 2.5rem;
-		font-weight: 700;
-		color: var(--text-primary, #1a1a1a);
-		margin-bottom: 0.25rem;
-	}
-
-	.stat-label {
-		font-size: 0.95rem;
-		color: var(--text-secondary, #666);
-		text-transform: uppercase;
+		font-size: 1rem;
+		color: var(--text-primary);
+		opacity: 0.7;
+		font-weight: 300;
 		letter-spacing: 0.05em;
+	}
+
+	.stats-summary {
+		display: flex;
+		gap: 2rem;
+		margin-bottom: 2rem;
+		font-size: 0.875rem;
+		color: var(--text-primary);
+		opacity: 0.7;
+		font-weight: 300;
 	}
 
 	.controls {
@@ -365,16 +309,21 @@
 		min-width: 250px;
 		padding: 0.75rem 1rem;
 		font-size: 1rem;
-		border: 2px solid var(--border-color, #e5e7eb);
-		border-radius: 8px;
-		background: var(--bg-primary, white);
-		color: var(--text-primary, #1a1a1a);
-		transition: border-color 0.2s;
+		font-family: inherit;
+		background: transparent;
+		color: var(--text-primary);
+		border: 1px solid var(--border-subtle);
+		outline: none;
+		transition: border-color 0.2s ease;
 	}
 
 	.search-input:focus {
-		outline: none;
-		border-color: var(--accent-color, #3b82f6);
+		border-color: var(--border-active);
+	}
+
+	.search-input::placeholder {
+		color: var(--text-primary);
+		opacity: 0.3;
 	}
 
 	.filter-buttons {
@@ -384,32 +333,31 @@
 
 	.filter-btn {
 		padding: 0.75rem 1.25rem;
-		font-size: 0.95rem;
-		font-weight: 500;
-		border: 2px solid var(--border-color, #e5e7eb);
-		border-radius: 8px;
-		background: var(--bg-primary, white);
-		color: var(--text-primary, #1a1a1a);
+		font-size: 0.75rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		border: 1px solid var(--border-subtle);
+		background: transparent;
+		color: var(--text-primary);
 		cursor: pointer;
-		transition: all 0.2s;
+		transition: all 0.2s ease;
+		font-family: inherit;
 	}
 
 	.filter-btn:hover {
-		border-color: var(--accent-color, #3b82f6);
-		background: var(--bg-secondary, #f9fafb);
+		border-color: var(--border-active);
+		background: var(--border-subtle);
 	}
 
 	.filter-btn.active {
-		background: var(--accent-color, #3b82f6);
-		color: white;
-		border-color: var(--accent-color, #3b82f6);
+		border-color: var(--border-active);
+		background: rgba(255, 255, 255, 0.05);
 	}
 
 	.table-wrapper {
 		overflow-x: auto;
-		background: var(--bg-primary, white);
-		border-radius: 12px;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+		border: 1px solid var(--border-subtle);
+		background: transparent;
 		margin-bottom: 1rem;
 	}
 
@@ -419,103 +367,95 @@
 	}
 
 	.players-table thead {
-		background: var(--bg-secondary, #f9fafb);
-		border-bottom: 2px solid var(--border-color, #e5e7eb);
+		background: transparent;
+		border-bottom: 1px solid var(--border-subtle);
 	}
 
 	.players-table th {
 		padding: 1rem;
 		text-align: left;
-		font-weight: 600;
-		color: var(--text-primary, #1a1a1a);
-		font-size: 0.875rem;
+		font-weight: 300;
+		color: var(--text-primary);
+		font-size: 0.75rem;
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
+		letter-spacing: 0.1em;
+		opacity: 0.8;
 	}
 
 	.players-table th.sortable {
 		cursor: pointer;
 		user-select: none;
-		transition: background 0.2s;
+		transition: opacity 0.2s;
 	}
 
 	.players-table th.sortable:hover {
-		background: var(--hover-bg, #f3f4f6);
+		opacity: 1;
 	}
 
 	.players-table tbody tr {
-		border-bottom: 1px solid var(--border-color, #e5e7eb);
-		transition: background 0.15s;
+		border-bottom: 1px solid var(--border-subtle);
+		transition: opacity 0.15s;
 	}
 
 	.players-table tbody tr:hover {
-		background: var(--hover-bg, #f9fafb);
+		opacity: 0.8;
 	}
 
 	.players-table tbody tr.inactive-row {
-		opacity: 0.7;
+		opacity: 0.5;
 	}
 
 	.players-table td {
 		padding: 1rem;
-		font-size: 0.95rem;
-		color: var(--text-primary, #1a1a1a);
+		font-size: 0.875rem;
+		color: var(--text-primary);
 	}
 
 	.name-cell {
-		font-weight: 500;
+		font-weight: 300;
 	}
 
 	.player-name {
-		font-size: 1.05rem;
+		font-size: 0.875rem;
 	}
 
 	.elo-cell {
-		font-weight: 600;
+		font-weight: 300;
 	}
 
 	.elo-value {
-		color: var(--accent-color, #3b82f6);
-		font-size: 1.1rem;
+		font-size: 1rem;
 	}
 
 	.wins {
-		color: var(--success-color, #16a34a);
-		font-weight: 600;
+		font-weight: 300;
 	}
 
 	.separator {
-		color: var(--text-secondary, #999);
+		opacity: 0.4;
 		margin: 0 0.25rem;
 	}
 
 	.losses {
-		color: var(--error-color, #dc2626);
-		font-weight: 600;
+		font-weight: 300;
 	}
 
 	.win-rate {
-		font-weight: 600;
+		font-weight: 300;
 	}
 
 	.status-badge {
 		display: inline-block;
 		padding: 0.25rem 0.75rem;
-		font-size: 0.875rem;
-		border-radius: 6px;
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.025em;
+		font-size: 0.625rem;
+		border: 1px solid var(--border-subtle);
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		opacity: 0.6;
 	}
 
 	.status-badge.active {
-		background: #d1fae5;
-		color: #065f46;
-	}
-
-	.status-badge.inactive {
-		background: #fef3c7;
-		color: #92400e;
+		opacity: 0.8;
 	}
 
 	.actions-cell {
@@ -524,76 +464,73 @@
 		flex-wrap: wrap;
 	}
 
-	.btn {
-		padding: 0.5rem 1rem;
-		font-size: 0.875rem;
-		font-weight: 500;
-		border-radius: 6px;
-		border: none;
-		cursor: pointer;
-		transition: all 0.2s;
-		text-decoration: none;
-		display: inline-block;
-		text-align: center;
-	}
-
-	.btn-sm {
+	.btn-action {
 		padding: 0.5rem 0.875rem;
-		font-size: 0.8125rem;
+		font-size: 0.625rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		background: transparent;
+		border: 1px solid var(--border-subtle);
+		color: var(--text-primary);
+		cursor: pointer;
+		transition: all 0.2s ease;
+		font-family: inherit;
 	}
 
-	.btn-success {
-		background: #16a34a;
-		color: white;
+	.btn-action:hover {
+		border-color: var(--border-active);
+		background: var(--border-subtle);
 	}
 
-	.btn-success:hover {
-		background: #15803d;
+	.btn-view {
+		display: inline-block;
+		padding: 0.5rem 0.875rem;
+		font-size: 0.625rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		color: var(--text-primary);
+		text-decoration: underline;
+		text-decoration-thickness: 0.5px;
+		border: none;
+		background: transparent;
+		transition: opacity 0.3s ease;
 	}
 
-	.btn-warning {
-		background: #d97706;
-		color: white;
-	}
-
-	.btn-warning:hover {
-		background: #b45309;
-	}
-
-	.btn-secondary {
-		background: var(--bg-secondary, #f9fafb);
-		color: var(--text-primary, #1a1a1a);
-		border: 1px solid var(--border-color, #e5e7eb);
-	}
-
-	.btn-secondary:hover {
-		background: #f3f4f6;
+	.btn-view:hover {
+		opacity: 0.6;
 	}
 
 	.no-results {
 		text-align: center;
 		padding: 3rem !important;
-		color: var(--text-secondary, #666);
+		color: var(--text-primary);
+		opacity: 0.6;
+		font-weight: 300;
 	}
 
 	.results-summary {
 		text-align: center;
 		padding: 1rem;
-		font-size: 0.95rem;
-		color: var(--text-secondary, #666);
+		font-size: 0.875rem;
+		color: var(--text-primary);
+		opacity: 0.7;
+		font-weight: 300;
 	}
 
 	@media (max-width: 768px) {
 		.container {
-			padding: 1rem;
+			padding: 5rem 1rem 3rem 1rem;
 		}
 
-		h1 {
-			font-size: 2rem;
+		.page-header {
+			flex-direction: column;
+			gap: 1rem;
+			align-items: flex-start;
 		}
 
-		.stats-bar {
-			grid-template-columns: 1fr;
+		.nav-links {
+			flex-direction: column;
+			gap: 0.75rem;
 		}
 
 		.controls {
@@ -610,7 +547,7 @@
 		}
 
 		.players-table {
-			font-size: 0.875rem;
+			font-size: 0.8rem;
 		}
 
 		.players-table th,
@@ -618,13 +555,14 @@
 			padding: 0.75rem 0.5rem;
 		}
 
-		/* Stack actions vertically on mobile */
 		.actions-cell {
 			flex-direction: column;
 		}
 
-		.btn {
+		.btn-action,
+		.btn-view {
 			width: 100%;
+			text-align: center;
 		}
 	}
 </style>

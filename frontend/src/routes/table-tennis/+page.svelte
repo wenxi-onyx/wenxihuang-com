@@ -18,6 +18,7 @@
 	let sortField = $state<'rank' | 'name' | 'current_elo' | 'games_played' | 'wins' | 'losses' | 'win_rate'>('current_elo');
 	let sortDirection = $state<'asc' | 'desc'>('desc');
 	let abortController: AbortController | null = null; // For canceling in-flight requests
+	let showManageDropdown = $state(false);
 
 	async function loadSeasons() {
 		try {
@@ -188,8 +189,23 @@
 				<a href="/table-tennis/add-match">ADD MATCH</a>
 			{/if}
 			<a href="/table-tennis/matches">MATCH HISTORY</a>
-			{#if user?.role === 'admin'}
-				<a href="/table-tennis/seasons">MANAGE SEASONS</a>
+			{#if user}
+				<div class="dropdown">
+					<button
+						class="dropdown-toggle"
+						onclick={() => showManageDropdown = !showManageDropdown}
+						onblur={() => setTimeout(() => showManageDropdown = false, 200)}
+					>
+						MANAGE ▾
+					</button>
+					{#if showManageDropdown}
+						<div class="dropdown-menu">
+							<a href="/table-tennis/seasons" class="dropdown-item">Seasons</a>
+							<a href="/table-tennis/admin" class="dropdown-item">Elo Algorithms</a>
+							<a href="/table-tennis/admin/players" class="dropdown-item">Players</a>
+						</div>
+					{/if}
+				</div>
 			{/if}
 			<a href="/">BACK</a>
 		</nav>
@@ -324,6 +340,7 @@
 
 	.nav-links {
 		display: flex;
+		align-items: center;
 		gap: 2rem;
 	}
 
@@ -336,10 +353,71 @@
 		color: inherit;
 		opacity: 0.7;
 		transition: opacity 0.2s ease;
+		line-height: 1;
 	}
 
 	.nav-links a:hover {
 		opacity: 1;
+	}
+
+	.dropdown {
+		position: relative;
+	}
+
+	.dropdown-toggle {
+		font-size: 0.875rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		text-decoration: none;
+		color: inherit;
+		opacity: 0.7;
+		transition: opacity 0.2s ease;
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0;
+		margin: 0;
+		font-family: inherit;
+		appearance: none;
+		line-height: 1;
+	}
+
+	.dropdown-toggle:hover {
+		opacity: 1;
+	}
+
+	.dropdown-menu {
+		position: absolute;
+		top: calc(100% + 0.5rem);
+		right: 0;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-subtle);
+		min-width: 200px;
+		z-index: 1000;
+		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+	}
+
+	.dropdown-item {
+		display: block;
+		padding: 0.75rem 1rem;
+		font-size: 0.875rem;
+		font-weight: 300;
+		letter-spacing: 0.05em;
+		text-decoration: none;
+		color: var(--text-primary);
+		opacity: 0.8;
+		transition: all 0.2s ease;
+		border-bottom: 1px solid var(--border-subtle);
+	}
+
+	.dropdown-item:last-child {
+		border-bottom: none;
+	}
+
+	.dropdown-item:hover {
+		opacity: 1;
+		background: var(--border-subtle);
 	}
 
 	.loading, .error {

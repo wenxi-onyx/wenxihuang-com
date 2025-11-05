@@ -20,7 +20,8 @@
 		return unsubscribe; // Clean up subscription when component is destroyed
 	});
 
-	async function handleSubmit() {
+	async function handleSubmit(e: Event) {
+		e.preventDefault();
 		if (!username || !password) {
 			error = 'Please enter both username and password';
 			return;
@@ -40,7 +41,11 @@
 
 	function handleKeyPress(event: KeyboardEvent) {
 		if (event.key === 'Enter') {
-			handleSubmit();
+			event.preventDefault();
+			const form = (event.target as HTMLElement).closest('form');
+			if (form) {
+				form.requestSubmit();
+			}
 		}
 	}
 </script>
@@ -55,7 +60,7 @@
 			</div>
 		{/if}
 
-		<form class="login-form" on:submit|preventDefault={handleSubmit}>
+		<form class="login-form" onsubmit={handleSubmit}>
 			<div class="form-group">
 				<label for="username">USERNAME</label>
 				<input
@@ -65,7 +70,7 @@
 					autocomplete="username"
 					required
 					bind:value={username}
-					on:keypress={handleKeyPress}
+					onkeypress={handleKeyPress}
 					disabled={loading}
 				/>
 			</div>
@@ -79,7 +84,7 @@
 					autocomplete="current-password"
 					required
 					bind:value={password}
-					on:keypress={handleKeyPress}
+					onkeypress={handleKeyPress}
 					disabled={loading}
 				/>
 			</div>
