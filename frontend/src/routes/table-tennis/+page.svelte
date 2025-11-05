@@ -4,6 +4,7 @@
 	import { playersApi, seasonsApi, type PlayerWithStats, type Season, type PlayerSeasonStats } from '$lib/api/client';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import LoginButton from '$lib/components/LoginButton.svelte';
+	import AddMatchModal, { openAddMatchModal } from '$lib/components/AddMatchModal.svelte';
 
 	const user = $derived($authStore.user);
 
@@ -172,6 +173,13 @@
 		if (player.games_played === 0) return '0.0';
 		return ((player.wins / player.games_played) * 100).toFixed(1);
 	}
+
+	function handleAddMatch() {
+		openAddMatchModal(() => {
+			// Reload players after match is added
+			loadPlayers();
+		}, user?.name);
+	}
 </script>
 
 <svelte:head>
@@ -180,13 +188,16 @@
 
 <ThemeToggle />
 <LoginButton />
+<AddMatchModal />
 
 <div class="container">
 	<header class="page-header">
 		<h1>Table Tennis Leaderboard</h1>
 		<nav class="nav-links">
 			{#if user}
-				<a href="/table-tennis/add-match">ADD MATCH</a>
+				<button class="nav-link-btn" onclick={handleAddMatch}>
+					<span class="plus-icon">+</span> ADD MATCH
+				</button>
 			{/if}
 			<a href="/table-tennis/matches">MATCH HISTORY</a>
 			{#if user}
@@ -286,7 +297,9 @@
 								{/if}
 							</td>
 							<td class="name-cell">
-								<span class="player-name">{player.name}</span>
+								<a href="/table-tennis/players/{player.id}" class="player-name-link">
+									<span class="player-name">{player.name}</span>
+								</a>
 								{#if !player.is_active}
 									<span class="inactive-badge">Inactive</span>
 								{/if}
@@ -358,6 +371,38 @@
 
 	.nav-links a:hover {
 		opacity: 1;
+	}
+
+	.nav-link-btn {
+		font-size: 0.875rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		text-decoration: none;
+		color: inherit;
+		opacity: 0.7;
+		transition: opacity 0.2s ease;
+		line-height: 1;
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0;
+		margin: 0;
+		font-family: inherit;
+		appearance: none;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.nav-link-btn:hover {
+		opacity: 1;
+	}
+
+	.plus-icon {
+		font-size: 1.2rem;
+		line-height: 1;
+		font-weight: 300;
 	}
 
 	.dropdown {
@@ -620,6 +665,20 @@
 
 	:global([data-theme='dark']) .name-cell {
 		font-weight: 400;
+	}
+
+	.player-name-link {
+		text-decoration: none;
+		color: inherit;
+		display: inline-flex;
+		align-items: center;
+		transition: opacity 0.2s ease;
+	}
+
+	.player-name-link:hover {
+		opacity: 0.6;
+		text-decoration: underline;
+		text-decoration-thickness: 0.5px;
 	}
 
 	.player-name {

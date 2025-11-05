@@ -7,6 +7,7 @@
 	import LoginButton from '$lib/components/LoginButton.svelte';
 	import Toast, { showToast } from '$lib/components/Toast.svelte';
 	import ConfirmModal, { confirm } from '$lib/components/ConfirmModal.svelte';
+	import AddMatchModal, { openAddMatchModal } from '$lib/components/AddMatchModal.svelte';
 
 	const user = $derived($authStore.user);
 	const isAdmin = $derived(user?.role === 'admin');
@@ -116,6 +117,13 @@
 		if (match.player2_games_won > match.player1_games_won) return 'player2';
 		return 'tie';
 	}
+
+	function handleAddMatch() {
+		openAddMatchModal(() => {
+			// Reload matches after match is added
+			loadMatches(currentPage);
+		}, user?.name);
+	}
 </script>
 
 <svelte:head>
@@ -126,13 +134,16 @@
 <LoginButton />
 <Toast />
 <ConfirmModal />
+<AddMatchModal />
 
 <div class="container">
 	<header class="page-header">
 		<h1>Match History</h1>
 		<nav class="nav-links">
 			{#if user}
-				<a href="/table-tennis/add-match">ADD MATCH</a>
+				<button class="nav-link-btn" onclick={handleAddMatch}>
+					<span class="plus-icon">+</span> ADD MATCH
+				</button>
 			{/if}
 			<a href="/table-tennis">BACK</a>
 		</nav>
@@ -144,7 +155,7 @@
 		<div class="empty-state">
 			<p>No matches found.</p>
 			{#if user}
-				<a href="/table-tennis/add-match" class="btn">Add First Match</a>
+				<button class="btn" onclick={handleAddMatch}>Add First Match</button>
 			{/if}
 		</div>
 	{:else}
@@ -380,6 +391,38 @@
 
 	.nav-links a:hover {
 		opacity: 1;
+	}
+
+	.nav-link-btn {
+		font-size: 0.875rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		text-decoration: none;
+		color: inherit;
+		opacity: 0.7;
+		transition: opacity 0.2s ease;
+		line-height: 1;
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0;
+		margin: 0;
+		font-family: inherit;
+		appearance: none;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.nav-link-btn:hover {
+		opacity: 1;
+	}
+
+	.plus-icon {
+		font-size: 1.2rem;
+		line-height: 1;
+		font-weight: 300;
 	}
 
 	.pagination-info {
@@ -800,11 +843,6 @@
 			flex-direction: column;
 			gap: 0.75rem;
 			width: 100%;
-		}
-
-		.btn-add {
-			margin-left: 0;
-			text-align: center;
 		}
 
 		.match-summary {

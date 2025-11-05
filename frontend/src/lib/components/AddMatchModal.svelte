@@ -1,13 +1,29 @@
+<script lang="ts" module>
+	import { writable, get } from 'svelte/store';
+
+	type AddMatchModalState = {
+		isOpen: boolean;
+		onSuccess?: () => void;
+		userName?: string;
+	};
+
+	const modalStore = writable<AddMatchModalState>({ isOpen: false });
+
+	export function openAddMatchModal(onSuccess?: () => void, userName?: string) {
+		modalStore.set({ isOpen: true, onSuccess, userName });
+	}
+
+	export function closeAddMatchModal() {
+		modalStore.set({ isOpen: false });
+	}
+</script>
+
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { goto } from '$app/navigation';
-	import { authStore } from '$lib/stores/auth';
 	import { matchesApi, seasonsApi, type ActiveSeasonPlayer, type Season, type GameWinner } from '$lib/api/client';
-	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
-	import LoginButton from '$lib/components/LoginButton.svelte';
-	import Toast, { showToast } from '$lib/components/Toast.svelte';
+	import { showToast } from '$lib/components/Toast.svelte';
 
-	const user = $derived($authStore.user);
+	let modalState = $derived($modalStore);
 
 	let players = $state<ActiveSeasonPlayer[]>([]);
 	let activeSeason = $state<Season | null>(null);
@@ -42,13 +58,25 @@
 	let player2GamesWon = $derived(games.filter(g => g === 'Player2').length);
 	let score = $derived(`${player1GamesWon}-${player2GamesWon}`);
 
-	onMount(async () => {
-		// Check if user is authenticated
-		if (!user) {
-			goto('/login');
-			return;
-		}
+	// Check if players are available for better UX
+	let playersAvailable = $derived(players.length > 0);
+	let bothPlayersSelected = $derived(player1Id && player2Id && player1Id !== player2Id);
 
+	// Load data when modal opens
+	$effect(() => {
+		if (modalState.isOpen) {
+			if (players.length === 0) {
+				loadData();
+			} else {
+				// If data already loaded, just auto-populate player1
+				if (modalState.userName) {
+					autoPopulatePlayer1(modalState.userName, players);
+				}
+			}
+		}
+	});
+
+	async function loadData() {
 		try {
 			loading = true;
 
@@ -61,14 +89,47 @@
 			activeSeason = season;
 			players = seasonPlayers;
 
+			// Auto-populate player1 if user's last name matches exactly one player
+			if (modalState.userName) {
+				autoPopulatePlayer1(modalState.userName, seasonPlayers);
+			}
+
 			loading = false;
 		} catch (e) {
 			showToast(e instanceof Error ? e.message : 'Failed to load data', 'error');
 			loading = false;
 		}
-	});
+	}
+
+	function autoPopulatePlayer1(userName: string, playerList: ActiveSeasonPlayer[]) {
+		// Extract last name (last word after splitting by space)
+		const nameParts = userName.trim().split(/\s+/);
+		if (nameParts.length === 0) return;
+
+		const userLastName = nameParts[nameParts.length - 1].toLowerCase();
+
+		// Find players whose last name matches
+		const matchingPlayers = playerList.filter(player => {
+			const playerNameParts = player.name.trim().split(/\s+/);
+			if (playerNameParts.length === 0) return false;
+
+			const playerLastName = playerNameParts[playerNameParts.length - 1].toLowerCase();
+			return playerLastName === userLastName;
+		});
+
+		// Only auto-select if exactly one player matches
+		if (matchingPlayers.length === 1) {
+			player1Id = matchingPlayers[0].id;
+		}
+	}
 
 	async function handleGameWinner(gameIndex: number, winner: GameWinner) {
+		// If clicking the same winner again, uncheck it
+		if (games[gameIndex] === winner) {
+			games[gameIndex] = null;
+			return;
+		}
+
 		// Set the winner for this game
 		games[gameIndex] = winner;
 
@@ -143,6 +204,14 @@
 			player2Id = '';
 			games = [null, null, null, null, null];
 			submittedAt = getDefaultDateTime();
+
+			// Call onSuccess callback if provided
+			if (modalState.onSuccess) {
+				modalState.onSuccess();
+			}
+
+			// Close modal
+			closeAddMatchModal();
 		} catch (e) {
 			showToast(e instanceof Error ? e.message : 'Failed to record match', 'error');
 		} finally {
@@ -155,184 +224,253 @@
 		return player ? player.name : '';
 	}
 
-	// Check if players are available for better UX
-	let playersAvailable = $derived(players.length > 0);
-	let bothPlayersSelected = $derived(player1Id && player2Id && player1Id !== player2Id);
-</script>
+	function handleClose() {
+		if (!submitting) {
+			// Reset form when closing
+			player1Id = '';
+			player2Id = '';
+			games = [null, null, null, null, null];
+			submittedAt = getDefaultDateTime();
 
-<svelte:head>
-	<title>Add Match - Table Tennis</title>
-</svelte:head>
-
-<ThemeToggle />
-<LoginButton />
-
-<div class="container">
-	<header class="page-header">
-		<h1>Add Match Result</h1>
-		<nav class="nav-links">
-			<a href="/table-tennis">BACK TO LEADERBOARD</a>
-		</nav>
-	</header>
-
-	{#if !user}
-		<div class="error-card">
-			<p>You must be logged in to add match results.</p>
-			<a href="/login" class="btn">Go to Login</a>
-		</div>
-	{:else if loading}
-		<div class="loading">Loading...</div>
-	{:else if !activeSeason}
-		<div class="error-card">
-			<p>No active season found. Please contact an administrator.</p>
-		</div>
-	{:else if !playersAvailable}
-		<div class="error-card">
-			<p>No players available in the active season. Please contact an administrator to add players to the season.</p>
-		</div>
-	{:else}
-		<div class="form-card">
-			<div class="season-info">
-				<h3>Current Season: {activeSeason.name}</h3>
-				{#if activeSeason.description}
-					<p>{activeSeason.description}</p>
-				{/if}
-			</div>
-
-			<form onsubmit={handleSubmit}>
-				<div class="player-selection">
-					<div class="form-group">
-						<label for="player1">Player 1</label>
-						<select
-							id="player1"
-							bind:value={player1Id}
-							required
-							disabled={submitting}
-						>
-							<option value="">Select Player 1</option>
-							{#each players as player}
-								<option value={player.id}>{player.name}</option>
-							{/each}
-						</select>
-					</div>
-
-					<div class="vs-divider">VS</div>
-
-					<div class="form-group">
-						<label for="player2">Player 2</label>
-						<select
-							id="player2"
-							bind:value={player2Id}
-							required
-							disabled={submitting}
-						>
-							<option value="">Select Player 2</option>
-							{#each players as player}
-								<option value={player.id}>{player.name}</option>
-							{/each}
-						</select>
-					</div>
-				</div>
-
-				{#if bothPlayersSelected}
-					<div class="games-section">
-						<div class="games-header">
-							<h3>Record Games</h3>
-							<div class="score-display">{score}</div>
-						</div>
-						<p class="help-text">Click the winner's name for each game. New rows will appear automatically.</p>
-
-						<div class="games-list">
-							{#each games as game, index (index)}
-								<div class="game-row" id="game-{index}">
-									<div class="game-number">Game {index + 1}</div>
-									<div class="game-winners">
-										<button
-											type="button"
-											class="winner-btn"
-											class:selected={game === 'Player1'}
-											onclick={() => handleGameWinner(index, 'Player1')}
-											disabled={submitting}
-										>
-											<span class="checkbox" class:checked={game === 'Player1'}>
-												{#if game === 'Player1'}✓{/if}
-											</span>
-											<span class="player-name">{getPlayerName(player1Id)}</span>
-										</button>
-
-										<button
-											type="button"
-											class="winner-btn"
-											class:selected={game === 'Player2'}
-											onclick={() => handleGameWinner(index, 'Player2')}
-											disabled={submitting}
-										>
-											<span class="checkbox" class:checked={game === 'Player2'}>
-												{#if game === 'Player2'}✓{/if}
-											</span>
-											<span class="player-name">{getPlayerName(player2Id)}</span>
-										</button>
-									</div>
-									<button
-										type="button"
-										class="remove-btn"
-										class:invisible={!(games.length > 1 && game !== null)}
-										onclick={() => removeGame(index)}
-										disabled={submitting || !(games.length > 1 && game !== null)}
-										title="Remove this game"
-									>
-										×
-									</button>
-								</div>
-							{/each}
-						</div>
-					</div>
-				{/if}
-
-				<div class="form-group">
-					<label for="submittedAt">Match Date/Time (defaults to today at 1:00 PM)</label>
-					<input
-						type="datetime-local"
-						id="submittedAt"
-						bind:value={submittedAt}
-						disabled={submitting}
-					/>
-					<p class="help-text">Adjust the date and time as needed. Individual game times will be calculated automatically.</p>
-				</div>
-
-				<div class="form-actions">
-					<button type="submit" class="btn btn-primary" disabled={submitting || !bothPlayersSelected || player1GamesWon + player2GamesWon === 0}>
-						{submitting ? 'Recording...' : 'Record Match'}
-					</button>
-					<a href="/table-tennis" class="btn btn-secondary">
-						Cancel
-					</a>
-				</div>
-			</form>
-		</div>
-	{/if}
-</div>
-
-<Toast />
-
-<style>
-	.container {
-		max-width: 800px;
-		margin: 0 auto;
-		padding: 6rem 2rem 4rem 2rem;
+			closeAddMatchModal();
+		}
 	}
 
-	.page-header {
+	onMount(() => {
+		function handleEscape(e: KeyboardEvent) {
+			const currentModal = get(modalStore);
+			if (e.key === 'Escape' && currentModal.isOpen && !submitting) {
+				handleClose();
+			}
+		}
+
+		document.addEventListener('keydown', handleEscape);
+		return () => document.removeEventListener('keydown', handleEscape);
+	});
+</script>
+
+{#if modalState.isOpen}
+	<div
+		class="modal-backdrop"
+		onclick={handleClose}
+		onkeydown={(e) => e.key === 'Enter' && handleClose()}
+		role="button"
+		tabindex="-1"
+		aria-label="Close modal"
+	>
+		<div
+			class="modal"
+			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="modal-title"
+		>
+			<div class="modal-header">
+				<h2 id="modal-title">Add Match Result</h2>
+				<button class="close-btn" onclick={handleClose} disabled={submitting}>×</button>
+			</div>
+
+			<div class="modal-body">
+				{#if loading}
+					<div class="loading">Loading...</div>
+				{:else if !activeSeason}
+					<div class="error-card">
+						<p>No active season found. Please contact an administrator.</p>
+					</div>
+				{:else if !playersAvailable}
+					<div class="error-card">
+						<p>No players available in the active season. Please contact an administrator to add players to the season.</p>
+					</div>
+				{:else}
+					<div class="season-info">
+						<h3>Current Season: {activeSeason.name}</h3>
+						{#if activeSeason.description}
+							<p>{activeSeason.description}</p>
+						{/if}
+					</div>
+
+					<form onsubmit={handleSubmit}>
+						<div class="player-selection">
+							<div class="form-group">
+								<label for="player1">Player 1</label>
+								<select
+									id="player1"
+									bind:value={player1Id}
+									required
+									disabled={submitting}
+								>
+									<option value="">Select Player 1</option>
+									{#each players as player}
+										<option value={player.id}>{player.name}</option>
+									{/each}
+								</select>
+							</div>
+
+							<div class="vs-divider">VS</div>
+
+							<div class="form-group">
+								<label for="player2">Player 2</label>
+								<select
+									id="player2"
+									bind:value={player2Id}
+									required
+									disabled={submitting}
+								>
+									<option value="">Select Player 2</option>
+									{#each players as player}
+										<option value={player.id}>{player.name}</option>
+									{/each}
+								</select>
+							</div>
+						</div>
+
+						{#if bothPlayersSelected}
+							<div class="games-section">
+								<div class="games-header">
+									<h3>Record Games</h3>
+									<div class="score-display">{score}</div>
+								</div>
+								<p class="help-text">Click the winner's name for each game. New rows will appear automatically.</p>
+
+								<div class="games-list">
+									{#each games as game, index (index)}
+										<div class="game-row" id="game-{index}">
+											<div class="game-number">Game {index + 1}</div>
+											<div class="game-winners">
+												<button
+													type="button"
+													class="winner-btn"
+													class:selected={game === 'Player1'}
+													onclick={() => handleGameWinner(index, 'Player1')}
+													disabled={submitting}
+												>
+													<span class="checkbox" class:checked={game === 'Player1'}>
+														{#if game === 'Player1'}✓{/if}
+													</span>
+													<span class="player-name">{getPlayerName(player1Id)}</span>
+												</button>
+
+												<button
+													type="button"
+													class="winner-btn"
+													class:selected={game === 'Player2'}
+													onclick={() => handleGameWinner(index, 'Player2')}
+													disabled={submitting}
+												>
+													<span class="checkbox" class:checked={game === 'Player2'}>
+														{#if game === 'Player2'}✓{/if}
+													</span>
+													<span class="player-name">{getPlayerName(player2Id)}</span>
+												</button>
+											</div>
+											<button
+												type="button"
+												class="remove-btn"
+												class:invisible={!(games.length > 1 && game !== null)}
+												onclick={() => removeGame(index)}
+												disabled={submitting || !(games.length > 1 && game !== null)}
+												title="Remove this game"
+											>
+												×
+											</button>
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/if}
+
+						<div class="form-group">
+							<label for="submittedAt">Match Date/Time (defaults to today at 1:00 PM)</label>
+							<input
+								type="datetime-local"
+								id="submittedAt"
+								bind:value={submittedAt}
+								disabled={submitting}
+							/>
+							<p class="help-text">Adjust the date and time as needed. Individual game times will be calculated automatically.</p>
+						</div>
+
+						<div class="form-actions">
+							<button
+								type="button"
+								class="btn btn-secondary"
+								onclick={handleClose}
+								disabled={submitting}
+							>
+								Cancel
+							</button>
+							<button type="submit" class="btn btn-primary" disabled={submitting || !bothPlayersSelected || player1GamesWon + player2GamesWon === 0}>
+								{submitting ? 'Recording...' : 'Record Match'}
+							</button>
+						</div>
+					</form>
+				{/if}
+			</div>
+		</div>
+	</div>
+{/if}
+
+<style>
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.6);
+		backdrop-filter: blur(4px);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 10000;
+		animation: fadeIn 0.2s ease-out;
+		overflow-y: auto;
+		padding: 2rem 0;
+	}
+
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+
+	.modal {
+		background: var(--bg-primary, #000);
+		border: 1px solid var(--border-subtle);
+		max-width: 800px;
+		width: calc(100% - 2rem);
+		margin: auto;
+		animation: slideUp 0.3s ease-out;
+		max-height: calc(100vh - 4rem);
+		overflow-y: auto;
+	}
+
+	@keyframes slideUp {
+		from {
+			transform: translateY(20px);
+			opacity: 0;
+		}
+		to {
+			transform: translateY(0);
+			opacity: 1;
+		}
+	}
+
+	.modal-header {
+		padding: 1.5rem;
+		border-bottom: 1px solid var(--border-subtle);
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 3rem;
-		padding-bottom: 1rem;
-		border-bottom: 1px solid var(--border-subtle);
+		position: sticky;
+		top: 0;
+		background: var(--bg-primary);
+		z-index: 10;
 	}
 
-	.page-header h1 {
-		font-size: clamp(1.5rem, 4vw, 2.5rem);
+	.modal-header h2 {
+		font-size: 1rem;
 		font-weight: 300;
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
@@ -340,19 +478,34 @@
 		color: var(--text-primary);
 	}
 
-	.nav-links a {
-		font-size: 0.875rem;
-		font-weight: 300;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		text-decoration: none;
-		color: inherit;
-		opacity: 0.7;
+	.close-btn {
+		background: none;
+		border: none;
+		font-size: 2rem;
+		line-height: 1;
+		cursor: pointer;
+		color: var(--text-primary);
+		opacity: 0.5;
 		transition: opacity 0.2s ease;
+		padding: 0;
+		width: 2rem;
+		height: 2rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
-	.nav-links a:hover {
+	.close-btn:hover:not(:disabled) {
 		opacity: 1;
+	}
+
+	.close-btn:disabled {
+		cursor: not-allowed;
+		opacity: 0.3;
+	}
+
+	.modal-body {
+		padding: 2rem;
 	}
 
 	.loading {
@@ -372,12 +525,6 @@
 	.error-card p {
 		margin-bottom: 1.5rem;
 		color: var(--text-primary);
-	}
-
-	.form-card {
-		background: transparent;
-		border: 1px solid var(--border-subtle);
-		padding: 2rem;
 	}
 
 	.season-info {
@@ -676,17 +823,13 @@
 	}
 
 	@media (max-width: 768px) {
-		.container {
-			padding: 5rem 1rem 3rem 1rem;
+		.modal {
+			max-width: none;
+			width: 100%;
+			border-radius: 0;
 		}
 
-		.page-header {
-			flex-direction: column;
-			gap: 1rem;
-			align-items: flex-start;
-		}
-
-		.form-card {
+		.modal-body {
 			padding: 1.5rem;
 		}
 
@@ -721,7 +864,7 @@
 		}
 
 		.form-actions {
-			flex-direction: column;
+			flex-direction: column-reverse;
 		}
 
 		.btn {

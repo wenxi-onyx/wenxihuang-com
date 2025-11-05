@@ -6,15 +6,14 @@
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import LoginButton from '$lib/components/LoginButton.svelte';
 	import Toast, { showToast } from '$lib/components/Toast.svelte';
+	import ConfirmModal, { confirm } from '$lib/components/ConfirmModal.svelte';
 
-	let players: PlayerWithStats[] = [];
-	let filteredPlayers: PlayerWithStats[] = [];
-	let loading = true;
-	let error = '';
-	let searchQuery = '';
-	let filterStatus: 'all' | 'active' | 'inactive' = 'all';
-	let sortField: 'name' | 'current_elo' | 'games_played' = 'current_elo';
-	let sortDirection: 'asc' | 'desc' = 'desc';
+	let players = $state<PlayerWithStats[]>([]);
+	let loading = $state(true);
+	let searchQuery = $state('');
+	let filterStatus = $state<'all' | 'active' | 'inactive'>('all');
+	let sortField = $state<'name' | 'current_elo' | 'games_played'>('current_elo');
+	let sortDirection = $state<'asc' | 'desc'>('desc');
 
 	onMount(async () => {
 		const currentUser = await authStore.checkAuth();
@@ -30,16 +29,17 @@
 		try {
 			loading = true;
 			players = await playersApi.listPlayers();
-			loading = false;
 		} catch (e) {
 			showToast(e instanceof Error ? e.message : 'Failed to load players', 'error');
+		} finally {
 			loading = false;
 		}
 	}
 
-	$: {
+	// Filter and sort players reactively
+	const filteredPlayers = $derived.by(() => {
 		// Filter players
-		filteredPlayers = players.filter(player => {
+		const filtered = players.filter(player => {
 			const matchesSearch = player.name.toLowerCase().includes(searchQuery.toLowerCase());
 			const matchesStatus =
 				filterStatus === 'all' ||
@@ -49,28 +49,37 @@
 		});
 
 		// Sort players
-		filteredPlayers = [...filteredPlayers].sort((a, b) => {
+		return [...filtered].sort((a, b) => {
 			if (sortField === 'name') {
 				return sortDirection === 'asc'
 					? a.name.localeCompare(b.name)
 					: b.name.localeCompare(a.name);
 			}
 
-			let aValue = a[sortField];
-			let bValue = b[sortField];
+			const aValue = a[sortField];
+			const bValue = b[sortField];
 
 			if (typeof aValue === 'number' && typeof bValue === 'number') {
 				return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
 			}
 			return 0;
 		});
-	}
+	});
+
+	const activeCount = $derived(players.filter(p => p.is_active).length);
+	const inactiveCount = $derived(players.filter(p => !p.is_active).length);
 
 	async function handleToggleActive(playerId: string, currentStatus: boolean) {
 		const action = currentStatus ? 'deactivate' : 'activate';
-		if (!confirm(`Are you sure you want to ${action} this player?`)) {
-			return;
-		}
+		const confirmed = await confirm({
+			title: `${action.charAt(0).toUpperCase() + action.slice(1)} Player`,
+			message: `Are you sure you want to ${action} this player?`,
+			confirmText: action.toUpperCase(),
+			cancelText: 'CANCEL',
+			confirmStyle: currentStatus ? 'danger' : 'primary'
+		});
+
+		if (!confirmed) return;
 
 		try {
 			await adminApi.togglePlayerActive(playerId);
@@ -94,9 +103,6 @@
 		if (player.games_played === 0) return '0.0';
 		return ((player.wins / player.games_played) * 100).toFixed(1);
 	}
-
-	$: activeCount = players.filter(p => p.is_active).length;
-	$: inactiveCount = players.filter(p => !p.is_active).length;
 </script>
 
 <svelte:head>
@@ -106,6 +112,7 @@
 <ThemeToggle />
 <LoginButton />
 <Toast />
+<ConfirmModal />
 
 <div class="container">
 	<header class="page-header">
@@ -140,21 +147,21 @@
 					class:active={filterStatus === 'all'}
 					onclick={() => filterStatus = 'all'}
 				>
-					ALL
+					All
 				</button>
 				<button
 					class="filter-btn"
 					class:active={filterStatus === 'active'}
 					onclick={() => filterStatus = 'active'}
 				>
-					ACTIVE
+					Active
 				</button>
 				<button
 					class="filter-btn"
 					class:active={filterStatus === 'inactive'}
 					onclick={() => filterStatus = 'inactive'}
 				>
-					INACTIVE
+					Inactive
 				</button>
 			</div>
 		</div>
@@ -182,9 +189,7 @@
 					{#each filteredPlayers as player}
 						<tr class:inactive-row={!player.is_active}>
 							<td class="name-cell">
-								<div class="player-info">
-									<span class="player-name">{player.name}</span>
-								</div>
+								<span class="player-name">{player.name}</span>
 							</td>
 							<td class="elo-cell">
 								<span class="elo-value">{player.current_elo.toFixed(1)}</span>
@@ -198,7 +203,7 @@
 							<td class="win-rate">{getWinRate(player)}%</td>
 							<td>
 								<span class="status-badge" class:active={player.is_active}>
-									{player.is_active ? 'ACTIVE' : 'INACTIVE'}
+									{player.is_active ? 'Active' : 'Inactive'}
 								</span>
 							</td>
 							<td class="actions-cell">
@@ -206,7 +211,7 @@
 									class="btn-action"
 									onclick={() => handleToggleActive(player.id, player.is_active)}
 								>
-									{player.is_active ? 'DEACTIVATE' : 'ACTIVATE'}
+									{player.is_active ? 'Deactivate' : 'Activate'}
 								</button>
 								<a href="/table-tennis/players/{player.id}" class="btn-view">
 									View History
@@ -336,6 +341,7 @@
 		font-size: 0.75rem;
 		font-weight: 300;
 		letter-spacing: 0.1em;
+		text-transform: uppercase;
 		border: 1px solid var(--border-subtle);
 		background: transparent;
 		color: var(--text-primary);
@@ -408,40 +414,17 @@
 	.players-table td {
 		padding: 1rem;
 		font-size: 0.875rem;
+		font-weight: 300;
 		color: var(--text-primary);
-	}
-
-	.name-cell {
-		font-weight: 300;
-	}
-
-	.player-name {
-		font-size: 0.875rem;
-	}
-
-	.elo-cell {
-		font-weight: 300;
 	}
 
 	.elo-value {
 		font-size: 1rem;
 	}
 
-	.wins {
-		font-weight: 300;
-	}
-
 	.separator {
 		opacity: 0.4;
 		margin: 0 0.25rem;
-	}
-
-	.losses {
-		font-weight: 300;
-	}
-
-	.win-rate {
-		font-weight: 300;
 	}
 
 	.status-badge {
@@ -451,6 +434,7 @@
 		border: 1px solid var(--border-subtle);
 		font-weight: 300;
 		letter-spacing: 0.1em;
+		text-transform: uppercase;
 		opacity: 0.6;
 	}
 
@@ -469,6 +453,7 @@
 		font-size: 0.625rem;
 		font-weight: 300;
 		letter-spacing: 0.1em;
+		text-transform: uppercase;
 		background: transparent;
 		border: 1px solid var(--border-subtle);
 		color: var(--text-primary);

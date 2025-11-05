@@ -1,4 +1,4 @@
-<script lang="ts" context="module">
+<script lang="ts" module>
 	import { writable, get } from 'svelte/store';
 
 	export type ConfirmOptions = {
@@ -65,10 +65,24 @@
 </script>
 
 {#if modal}
-	<div class="modal-backdrop" onclick={() => handleCancel(modal)}>
-		<div class="modal" onclick={(e) => e.stopPropagation()}>
+	<div
+		class="modal-backdrop"
+		onclick={() => handleCancel(modal)}
+		onkeydown={(e) => e.key === 'Enter' && handleCancel(modal)}
+		role="button"
+		tabindex="0"
+		aria-label="Close modal"
+	>
+		<div
+			class="modal"
+			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="modal-title"
+		>
 			<div class="modal-header">
-				<h2>{modal.title}</h2>
+				<h2 id="modal-title">{modal.title}</h2>
 			</div>
 
 			<div class="modal-body">
