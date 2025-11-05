@@ -27,8 +27,11 @@
 
 	let players = $state<ActiveSeasonPlayer[]>([]);
 	let activeSeason = $state<Season | null>(null);
-	let loading = $state(true);
+	let loading = $state(false);
 	let submitting = $state(false);
+
+	// Track loading to cancel if modal closes
+	let loadAbortController: AbortController | null = null;
 
 	// Form state
 	let player1Id = $state('');
@@ -53,6 +56,14 @@
 	let games = $state<(GameWinner | null)[]>([null, null, null, null, null]); // Start with 5 empty games
 	const MAX_GAMES = 11; // Reasonable limit for a match
 
+	// Reset form state
+	function resetForm() {
+		player1Id = '';
+		player2Id = '';
+		games = [null, null, null, null, null];
+		submittedAt = getDefaultDateTime();
+	}
+
 	// Derived score
 	let player1GamesWon = $derived(games.filter(g => g === 'Player1').length);
 	let player2GamesWon = $derived(games.filter(g => g === 'Player2').length);
@@ -62,21 +73,32 @@
 	let playersAvailable = $derived(players.length > 0);
 	let bothPlayersSelected = $derived(player1Id && player2Id && player1Id !== player2Id);
 
-	// Load data when modal opens
+	// Load data when modal opens, cleanup when it closes
 	$effect(() => {
 		if (modalState.isOpen) {
-			if (players.length === 0) {
-				loadData();
-			} else {
-				// If data already loaded, just auto-populate player1
-				if (modalState.userName) {
-					autoPopulatePlayer1(modalState.userName, players);
-				}
+			// Reset form when modal opens
+			resetForm();
+
+			// Always reload data to ensure freshness
+			loadData();
+		} else {
+			// Cancel any in-flight load when modal closes
+			if (loadAbortController) {
+				loadAbortController.abort();
+				loadAbortController = null;
 			}
 		}
 	});
 
 	async function loadData() {
+		// Cancel previous load if any
+		if (loadAbortController) {
+			loadAbortController.abort();
+		}
+
+		loadAbortController = new AbortController();
+		const currentController = loadAbortController;
+
 		try {
 			loading = true;
 
@@ -85,6 +107,11 @@
 				seasonsApi.getActiveSeason(),
 				seasonsApi.getActiveSeasonPlayers()
 			]);
+
+			// Check if this load was cancelled
+			if (currentController.signal.aborted) {
+				return;
+			}
 
 			activeSeason = season;
 			players = seasonPlayers;
@@ -96,6 +123,10 @@
 
 			loading = false;
 		} catch (e) {
+			// Don't show error if request was cancelled
+			if (currentController.signal.aborted) {
+				return;
+			}
 			showToast(e instanceof Error ? e.message : 'Failed to load data', 'error');
 			loading = false;
 		}
@@ -103,14 +134,15 @@
 
 	function autoPopulatePlayer1(userName: string, playerList: ActiveSeasonPlayer[]) {
 		// Extract last name (last word after splitting by space)
-		const nameParts = userName.trim().split(/\s+/);
+		const nameParts = userName.trim().split(/\s+/).filter(part => part.length > 0);
 		if (nameParts.length === 0) return;
 
 		const userLastName = nameParts[nameParts.length - 1].toLowerCase();
+		if (!userLastName) return;
 
 		// Find players whose last name matches
 		const matchingPlayers = playerList.filter(player => {
-			const playerNameParts = player.name.trim().split(/\s+/);
+			const playerNameParts = player.name.trim().split(/\s+/).filter(part => part.length > 0);
 			if (playerNameParts.length === 0) return false;
 
 			const playerLastName = playerNameParts[playerNameParts.length - 1].toLowerCase();
@@ -157,7 +189,7 @@
 		}
 	}
 
-	async function handleSubmit(e: Event) {
+	async function handleSubmit(e: SubmitEvent) {
 		e.preventDefault();
 
 		// Validate form
@@ -199,18 +231,12 @@
 
 			showToast('Match recorded successfully!', 'success');
 
-			// Reset form
-			player1Id = '';
-			player2Id = '';
-			games = [null, null, null, null, null];
-			submittedAt = getDefaultDateTime();
-
 			// Call onSuccess callback if provided
 			if (modalState.onSuccess) {
 				modalState.onSuccess();
 			}
 
-			// Close modal
+			// Close modal (form will be reset when reopened)
 			closeAddMatchModal();
 		} catch (e) {
 			showToast(e instanceof Error ? e.message : 'Failed to record match', 'error');
@@ -226,12 +252,6 @@
 
 	function handleClose() {
 		if (!submitting) {
-			// Reset form when closing
-			player1Id = '';
-			player2Id = '';
-			games = [null, null, null, null, null];
-			submittedAt = getDefaultDateTime();
-
 			closeAddMatchModal();
 		}
 	}
@@ -253,15 +273,11 @@
 	<div
 		class="modal-backdrop"
 		onclick={handleClose}
-		onkeydown={(e) => e.key === 'Enter' && handleClose()}
-		role="button"
-		tabindex="-1"
 		aria-label="Close modal"
 	>
 		<div
 			class="modal"
 			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => e.stopPropagation()}
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="modal-title"
