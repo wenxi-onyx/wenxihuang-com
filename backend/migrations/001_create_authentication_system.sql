@@ -1,3 +1,8 @@
+-- =====================================================
+-- Migration 1: Authentication System
+-- Create user authentication with roles and sessions
+-- =====================================================
+
 -- Create user role enum
 -- admin: Full access
 -- user: Team members who can submit games/data
@@ -10,6 +15,8 @@ CREATE TABLE users (
     username VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     role user_role NOT NULL DEFAULT 'user',
+    first_name VARCHAR(50),
+    last_name VARCHAR(50),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

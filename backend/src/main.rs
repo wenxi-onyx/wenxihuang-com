@@ -55,6 +55,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Database connection pool created successfully");
 
+    // Run database migrations automatically on startup
+    tracing::info!("Running database migrations...");
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to run migrations: {}", e);
+            e
+        })?;
+    tracing::info!("Database migrations completed successfully");
+
     tracing::info!("Setting up routes...");
 
     // Auth routes
@@ -121,6 +132,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/players/{player_id}/toggle-active",
             post(handlers::players::toggle_player_active),
         )
+        // Season management routes
+        .route("/seasons", post(handlers::seasons::create_season))
+        .route(
+            "/seasons/{season_id}/activate",
+            post(handlers::seasons::activate_season),
+        )
+        .route(
+            "/seasons/{season_id}/recalculate",
+            post(handlers::seasons::recalculate_season),
+        )
+        .route(
+            "/seasons/{season_id}",
+            delete(handlers::seasons::delete_season),
+        )
+        // Season player management routes
+        .route(
+            "/seasons/{season_id}/players",
+            get(handlers::seasons::get_season_players),
+        )
+        .route(
+            "/seasons/{season_id}/available-players",
+            get(handlers::seasons::get_available_players),
+        )
+        .route(
+            "/seasons/{season_id}/players/add",
+            post(handlers::seasons::add_player_to_season),
+        )
+        .route(
+            "/seasons/{season_id}/players/remove",
+            post(handlers::seasons::remove_player_from_season),
+        )
         .route_layer(axum::middleware::from_fn_with_state(
             pool.clone(),
             self::middleware::auth::require_admin,
@@ -132,6 +174,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/players/{player_id}/history",
             get(handlers::players::get_player_history),
+        )
+        // Season routes
+        .route("/seasons", get(handlers::seasons::list_seasons))
+        .route("/seasons/active", get(handlers::seasons::get_active_season))
+        .route("/seasons/{season_id}", get(handlers::seasons::get_season))
+        .route(
+            "/seasons/{season_id}/leaderboard",
+            get(handlers::seasons::get_season_leaderboard),
         );
 
     tracing::info!("Routes configured successfully");

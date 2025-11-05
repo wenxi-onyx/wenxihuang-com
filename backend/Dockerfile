@@ -10,6 +10,9 @@ FROM alpine:3.22
 RUN apk add --no-cache ca-certificates libgcc
 WORKDIR /app
 COPY --from=builder /app/target/release/backend .
+COPY --from=builder /app/target/release/initialize ./initialize
+COPY --from=builder /app/target/release/create_admin ./create_admin
 COPY --from=builder /app/migrations ./migrations
+COPY ["Table Tennis Database - Ledger.csv", "./"]
 EXPOSE 8080
 CMD ["./backend"]

@@ -133,12 +133,12 @@
 
 <main class="settings-page">
     <div class="settings-content">
-        <div class="header-content">
-            <h1 class="page-title">USER SETTINGS</h1>
+        <header class="page-header">
+            <h1>User Settings</h1>
             <nav class="nav-links">
                 <button onclick={goBack} class="nav-link">BACK</button>
             </nav>
-        </div>
+        </header>
 
         <!-- Profile Information Section -->
         <section class="settings-section">
@@ -245,44 +245,36 @@
         flex-direction: column;
         align-items: center;
         justify-content: flex-start;
-        padding: 4rem 2rem;
+        padding: 6rem 2rem 4rem 2rem;
         min-height: 100vh;
     }
 
     .settings-content {
         display: flex;
         flex-direction: column;
-        align-items: center;
         gap: 3rem;
         width: 100%;
         max-width: 600px;
-        margin-top: 6rem;
+        margin-top: 0;
     }
 
-    .header-content {
+    .page-header {
         display: flex;
-        flex-direction: column;
+        justify-content: space-between;
         align-items: center;
-        gap: 1rem;
+        margin-bottom: 0;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        width: 100%;
     }
 
-    .page-title {
-        font-size: clamp(1.5rem, 4vw, 2rem);
+    .page-header h1 {
+        font-size: clamp(1.5rem, 4vw, 2.5rem);
         font-weight: 300;
-        letter-spacing: 0.15em;
-        text-align: center;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
         margin: 0;
         color: var(--text-primary);
-    }
-
-    :global([data-theme='dark']) .page-title {
-        font-weight: 700;
-    }
-
-    :global([data-theme='light']) .page-title {
-        font-family: 'Noto Sans JP', sans-serif;
-        font-weight: 100;
-        letter-spacing: 0.2em;
     }
 
     .nav-links {
@@ -291,27 +283,22 @@
     }
 
     .nav-link {
-        font-size: 0.75rem;
+        font-size: 0.875rem;
         font-weight: 300;
-        text-transform: uppercase;
         letter-spacing: 0.1em;
-        text-decoration: underline;
-        text-decoration-thickness: 0.5px;
-        color: var(--text-primary);
-        transition: opacity 0.3s ease;
+        text-transform: uppercase;
+        text-decoration: none;
+        color: inherit;
+        opacity: 0.7;
+        transition: opacity 0.2s ease;
         background: transparent;
         border: none;
         cursor: pointer;
         padding: 0;
     }
 
-    :global([data-theme='light']) .nav-link {
-        font-weight: 200;
-        text-decoration-thickness: 0.5px;
-    }
-
     .nav-link:hover {
-        opacity: 0.6;
+        opacity: 1;
     }
 
     .settings-section {
@@ -444,12 +431,17 @@
 
     @media (max-width: 768px) {
         .settings-page {
-            padding: 3rem 1.5rem;
+            padding: 5rem 1.5rem 3rem 1.5rem;
         }
 
         .settings-content {
-            margin-top: 4rem;
             gap: 2rem;
+        }
+
+        .page-header {
+            flex-direction: column;
+            gap: 1rem;
+            align-items: flex-start;
         }
 
         .settings-section {

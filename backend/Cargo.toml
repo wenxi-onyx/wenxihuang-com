@@ -8,12 +8,16 @@ name = "create_admin"
 path = "src/bin/create_admin.rs"
 
 [[bin]]
-name = "import_matches"
-path = "src/bin/import_matches.rs"
+name = "initialize"
+path = "src/bin/initialize.rs"
 
 [[bin]]
 name = "recalculate_elo"
 path = "src/bin/recalculate_elo.rs"
+
+[[bin]]
+name = "create_season"
+path = "src/bin/create_season.rs"
 
 [dependencies]
 argon2 = "0.5.3"

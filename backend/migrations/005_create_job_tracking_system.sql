@@ -1,3 +1,8 @@
+-- =====================================================
+-- Migration 5: Job Tracking System
+-- Track long-running background operations
+-- =====================================================
+
 -- Job tracking table for long-running operations
 CREATE TABLE jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

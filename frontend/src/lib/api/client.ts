@@ -186,6 +186,49 @@ export interface EloHistoryPoint {
     created_at: string;
 }
 
+export interface Season {
+    id: string;
+    name: string;
+    description: string | null;
+    start_date: string;
+    starting_elo: number;
+    k_factor: number;
+    base_k_factor: number | null;
+    new_player_k_bonus: number | null;
+    new_player_bonus_period: number | null;
+    is_active: boolean;
+    created_at: string;
+}
+
+export interface CreateSeasonRequest {
+    name: string;
+    description?: string;
+    start_date: string;
+    starting_elo: number;
+    k_factor: number;
+    base_k_factor?: number;
+    new_player_k_bonus?: number;
+    new_player_bonus_period?: number;
+}
+
+export interface PlayerSeasonStats {
+    player_id: string;
+    player_name: string;
+    current_elo: number;
+    games_played: number;
+    wins: number;
+    losses: number;
+    win_rate: number;
+    is_active: boolean;
+}
+
+export interface SeasonPlayer {
+    player_id: string;
+    player_name: string;
+    is_included: boolean;
+    is_active: boolean;
+}
+
 export const adminApi = {
     async createUser(data: CreateUserRequest): Promise<{ message: string; user: User }> {
         return apiCall<{ message: string; user: User }>('/api/admin/users', {
@@ -241,6 +284,86 @@ export const adminApi = {
     async togglePlayerActive(playerId: string): Promise<Player> {
         return apiCall<Player>(`/api/admin/players/${playerId}/toggle-active`, {
             method: 'POST',
+        });
+    },
+
+    // Season management
+    async createSeason(data: CreateSeasonRequest): Promise<Season> {
+        return apiCall<Season>('/api/admin/seasons', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async activateSeason(seasonId: string): Promise<{ message: string }> {
+        return apiCall<{ message: string }>(`/api/admin/seasons/${seasonId}/activate`, {
+            method: 'POST',
+        });
+    },
+
+    async recalculateSeason(seasonId: string): Promise<{ message: string }> {
+        return apiCall<{ message: string }>(`/api/admin/seasons/${seasonId}/recalculate`, {
+            method: 'POST',
+        });
+    },
+
+    async deleteSeason(seasonId: string): Promise<{ message: string }> {
+        return apiCall<{ message: string }>(`/api/admin/seasons/${seasonId}`, {
+            method: 'DELETE',
+        });
+    },
+
+    // Season player management
+    async getSeasonPlayers(seasonId: string): Promise<SeasonPlayer[]> {
+        return apiCall<SeasonPlayer[]>(`/api/admin/seasons/${seasonId}/players`, {
+            method: 'GET',
+        });
+    },
+
+    async getAvailablePlayers(seasonId: string): Promise<SeasonPlayer[]> {
+        return apiCall<SeasonPlayer[]>(`/api/admin/seasons/${seasonId}/available-players`, {
+            method: 'GET',
+        });
+    },
+
+    async addPlayerToSeason(seasonId: string, playerId: string): Promise<{ message: string }> {
+        return apiCall<{ message: string }>(`/api/admin/seasons/${seasonId}/players/add`, {
+            method: 'POST',
+            body: JSON.stringify({ player_id: playerId }),
+        });
+    },
+
+    async removePlayerFromSeason(seasonId: string, playerId: string): Promise<{ message: string }> {
+        return apiCall<{ message: string }>(`/api/admin/seasons/${seasonId}/players/remove`, {
+            method: 'POST',
+            body: JSON.stringify({ player_id: playerId }),
+        });
+    },
+};
+
+// Public Seasons API methods
+export const seasonsApi = {
+    async listSeasons(): Promise<Season[]> {
+        return apiCall<Season[]>('/api/seasons', {
+            method: 'GET',
+        });
+    },
+
+    async getActiveSeason(): Promise<Season | null> {
+        return apiCall<Season | null>('/api/seasons/active', {
+            method: 'GET',
+        });
+    },
+
+    async getSeason(seasonId: string): Promise<Season> {
+        return apiCall<Season>(`/api/seasons/${seasonId}`, {
+            method: 'GET',
+        });
+    },
+
+    async getSeasonLeaderboard(seasonId: string): Promise<PlayerSeasonStats[]> {
+        return apiCall<PlayerSeasonStats[]>(`/api/seasons/${seasonId}/leaderboard`, {
+            method: 'GET',
         });
     },
 };
