@@ -125,6 +125,9 @@
 		<h1>Match History</h1>
 		<nav class="nav-links">
 			<a href="/table-tennis">BACK TO LEADERBOARD</a>
+			{#if user}
+				<a href="/table-tennis/add-match" class="btn-add">ADD MATCH</a>
+			{/if}
 		</nav>
 	</header>
 
@@ -362,6 +365,28 @@
 
 	.nav-links a:hover {
 		opacity: 1;
+	}
+
+	.btn-add {
+		display: inline-block;
+		padding: 0.5rem 1.5rem;
+		font-size: 0.875rem;
+		font-weight: 300;
+		font-family: inherit;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		text-decoration: none;
+		border: 1px solid var(--border-subtle);
+		background: transparent;
+		color: var(--text-primary);
+		cursor: pointer;
+		transition: all 0.2s ease;
+		margin-left: 1rem;
+	}
+
+	.btn-add:hover {
+		border-color: var(--border-active);
+		background: rgba(255, 255, 255, 0.05);
 	}
 
 	.pagination-info {
