@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     // Get database URL from environment
     let database_url = env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5433/wenxihuang".to_string());
+        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5433/postgres".to_string());
 
     let pool = PgPool::connect(&database_url).await?;
 

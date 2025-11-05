@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: wenxihuang_dev
+      # POSTGRES_DB defaults to 'postgres' if not specified
     ports:
       - "5433:5432"  # Map to 5433 on host to avoid conflicts
     volumes:

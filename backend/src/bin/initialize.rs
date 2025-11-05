@@ -8,9 +8,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("====================================================\n");
 
     // Get database URL from environment
-    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
-        "postgresql://postgres:postgres@localhost:5433/wenxihuang_backend".to_string()
-    });
+    let database_url = env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5433/postgres".to_string());
 
     println!("Connecting to database...");
     let pool = PgPool::connect(&database_url).await?;
