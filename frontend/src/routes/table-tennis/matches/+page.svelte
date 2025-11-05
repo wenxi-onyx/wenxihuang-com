@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { fade } from 'svelte/transition';
 	import { authStore } from '$lib/stores/auth';
 	import { matchesApi, type MatchWithDetails } from '$lib/api/client';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
@@ -11,7 +12,8 @@
 	const isAdmin = $derived(user?.role === 'admin');
 
 	let matches = $state<MatchWithDetails[]>([]);
-	let loading = $state(true);
+	let initialLoading = $state(true);
+	let loadingMatches = $state(false);
 	let deletingMatchId = $state<string | null>(null);
 
 	// Track which matches are expanded
@@ -29,7 +31,11 @@
 
 	async function loadMatches(page: number = 1) {
 		try {
-			loading = true;
+			if (matches.length === 0) {
+				initialLoading = true;
+			} else {
+				loadingMatches = true;
+			}
 			const response = await matchesApi.listMatches(page, limit);
 			matches = response.matches;
 			currentPage = response.page;
@@ -38,7 +44,8 @@
 		} catch (e) {
 			showToast(e instanceof Error ? e.message : 'Failed to load matches', 'error');
 		} finally {
-			loading = false;
+			initialLoading = false;
+			loadingMatches = false;
 		}
 	}
 
@@ -124,20 +131,14 @@
 	<header class="page-header">
 		<h1>Match History</h1>
 		<nav class="nav-links">
-			<a href="/table-tennis">BACK TO LEADERBOARD</a>
 			{#if user}
-				<a href="/table-tennis/add-match" class="btn-add">ADD MATCH</a>
+				<a href="/table-tennis/add-match">ADD MATCH</a>
 			{/if}
+			<a href="/table-tennis">BACK TO LEADERBOARD</a>
 		</nav>
 	</header>
 
-	{#if !loading && matches.length > 0}
-		<div class="pagination-info">
-			Showing {matches.length} of {total} matches
-		</div>
-	{/if}
-
-	{#if loading}
+	{#if initialLoading}
 		<div class="loading">Loading match history...</div>
 	{:else if matches.length === 0}
 		<div class="empty-state">
@@ -147,20 +148,24 @@
 			{/if}
 		</div>
 	{:else}
+		<div class="pagination-info">
+			Showing {matches.length} of {total} matches
+		</div>
+
 		<!-- Pagination Controls (Top) -->
 		{#if totalPages > 1}
 			<div class="pagination pagination-top">
 				<button
 					class="page-btn"
 					onclick={() => goToPage(1)}
-					disabled={currentPage === 1 || loading}
+					disabled={currentPage === 1 || loadingMatches}
 				>
 					«
 				</button>
 				<button
 					class="page-btn"
 					onclick={() => goToPage(currentPage - 1)}
-					disabled={currentPage === 1 || loading}
+					disabled={currentPage === 1 || loadingMatches}
 				>
 					‹
 				</button>
@@ -172,23 +177,28 @@
 				<button
 					class="page-btn"
 					onclick={() => goToPage(currentPage + 1)}
-					disabled={currentPage === totalPages || loading}
+					disabled={currentPage === totalPages || loadingMatches}
 				>
 					›
 				</button>
 				<button
 					class="page-btn"
 					onclick={() => goToPage(totalPages)}
-					disabled={currentPage === totalPages || loading}
+					disabled={currentPage === totalPages || loadingMatches}
 				>
 					»
 				</button>
 			</div>
 		{/if}
 
-		<div class="matches-list">
-			{#each matches as match}
-				<div class="match-card" class:deleting={deletingMatchId === match.id}>
+		<div class="matches-list" class:loading={loadingMatches}>
+			{#if loadingMatches}
+				<div class="matches-loading-overlay">
+					<div class="loading-spinner">Loading matches...</div>
+				</div>
+			{/if}
+			{#each matches as match (match.id)}
+				<div class="match-card" class:deleting={deletingMatchId === match.id} in:fade={{ duration: 300, delay: 50 }} out:fade={{ duration: 200 }}>
 					<div class="match-header">
 						<div class="season-badge">{match.season_name}</div>
 						<div class="date">{formatDate(match.submitted_at)}</div>
@@ -292,14 +302,14 @@
 				<button
 					class="page-btn"
 					onclick={() => goToPage(1)}
-					disabled={currentPage === 1 || loading}
+					disabled={currentPage === 1 || loadingMatches}
 				>
 					«
 				</button>
 				<button
 					class="page-btn"
 					onclick={() => goToPage(currentPage - 1)}
-					disabled={currentPage === 1 || loading}
+					disabled={currentPage === 1 || loadingMatches}
 				>
 					‹
 				</button>
@@ -311,14 +321,14 @@
 				<button
 					class="page-btn"
 					onclick={() => goToPage(currentPage + 1)}
-					disabled={currentPage === totalPages || loading}
+					disabled={currentPage === totalPages || loadingMatches}
 				>
 					›
 				</button>
 				<button
 					class="page-btn"
 					onclick={() => goToPage(totalPages)}
-					disabled={currentPage === totalPages || loading}
+					disabled={currentPage === totalPages || loadingMatches}
 				>
 					»
 				</button>
@@ -365,28 +375,6 @@
 
 	.nav-links a:hover {
 		opacity: 1;
-	}
-
-	.btn-add {
-		display: inline-block;
-		padding: 0.5rem 1.5rem;
-		font-size: 0.875rem;
-		font-weight: 300;
-		font-family: inherit;
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		text-decoration: none;
-		border: 1px solid var(--border-subtle);
-		background: transparent;
-		color: var(--text-primary);
-		cursor: pointer;
-		transition: all 0.2s ease;
-		margin-left: 1rem;
-	}
-
-	.btn-add:hover {
-		border-color: var(--border-active);
-		background: rgba(255, 255, 255, 0.05);
 	}
 
 	.pagination-info {
@@ -442,13 +430,40 @@
 		flex-direction: column;
 		gap: 1.5rem;
 		margin-bottom: 2rem;
+		position: relative;
+		min-height: 200px;
+		transition: opacity 0.2s ease;
+	}
+
+	.matches-list.loading {
+		opacity: 0.6;
+		pointer-events: none;
+	}
+
+	.matches-loading-overlay {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		z-index: 10;
+		background: var(--bg-primary);
+		padding: 1.5rem 2rem;
+		border: 1px solid var(--border-subtle);
+	}
+
+	.loading-spinner {
+		font-size: 0.875rem;
+		color: var(--text-primary);
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		font-weight: 300;
 	}
 
 	.match-card {
 		background: transparent;
 		border: 1px solid var(--border-subtle);
 		padding: 1.5rem;
-		transition: all 0.2s ease;
+		transition: border-color 0.2s ease;
 	}
 
 	.match-card:hover {
@@ -773,6 +788,18 @@
 			flex-direction: column;
 			gap: 1rem;
 			align-items: flex-start;
+		}
+
+		.nav-links {
+			display: flex;
+			flex-direction: column;
+			gap: 0.75rem;
+			width: 100%;
+		}
+
+		.btn-add {
+			margin-left: 0;
+			text-align: center;
 		}
 
 		.match-summary {

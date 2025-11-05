@@ -91,52 +91,85 @@
 		// Get current theme
 		const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
 		const textColor = isDark ? '#ffffff' : '#000000';
-		const lineColor = isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)';
-		const fillColor = isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)';
 		const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)';
 		const borderColor = isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)';
 
-		// Prepare data points with sequential indices for even spacing
-		// Store dates separately for tooltip
-		const dates: Date[] = [];
-		const dataPoints = history.map((point, index) => {
-			dates.push(new Date(point.created_at));
-			return {
-				x: index + 1, // Use index for even spacing (start from 1 since we'll add a 0 point)
-				y: point.elo_after
-			};
+		// Define colors for seasons (cycle through these)
+		const seasonColors = [
+			{ border: 'rgba(59, 130, 246, 0.9)', bg: 'rgba(59, 130, 246, 0.05)' }, // blue
+			{ border: 'rgba(168, 85, 247, 0.9)', bg: 'rgba(168, 85, 247, 0.05)' }, // purple
+			{ border: 'rgba(34, 197, 94, 0.9)', bg: 'rgba(34, 197, 94, 0.05)' }, // green
+			{ border: 'rgba(234, 179, 8, 0.9)', bg: 'rgba(234, 179, 8, 0.05)' }, // yellow
+			{ border: 'rgba(239, 68, 68, 0.9)', bg: 'rgba(239, 68, 68, 0.05)' }, // red
+			{ border: 'rgba(236, 72, 153, 0.9)', bg: 'rgba(236, 72, 153, 0.05)' }, // pink
+			{ border: 'rgba(14, 165, 233, 0.9)', bg: 'rgba(14, 165, 233, 0.05)' }, // cyan
+			{ border: 'rgba(249, 115, 22, 0.9)', bg: 'rgba(249, 115, 22, 0.05)' }, // orange
+		];
+
+		// Group history by season
+		const seasonMap = new Map<string, { name: string; points: typeof history }>();
+		history.forEach(point => {
+			if (!seasonMap.has(point.season_id)) {
+				seasonMap.set(point.season_id, { name: point.season_name, points: [] });
+			}
+			seasonMap.get(point.season_id)!.points.push(point);
 		});
 
-		// Add starting point if we have history
-		if (history.length > 0) {
-			dates.unshift(new Date(history[0].created_at));
-			dataPoints.unshift({
-				x: 0,
-				y: history[0].elo_before
+		// Create datasets for each season
+		const datasets = [];
+		const dates: Date[] = [];
+		let globalIndex = 0;
+		let seasonColorIndex = 0;
+
+		for (const [seasonId, { name: seasonName, points }] of seasonMap) {
+			const seasonColor = seasonColors[seasonColorIndex % seasonColors.length];
+			seasonColorIndex++;
+
+			const dataPoints = [];
+
+			// Add starting point for this season (elo_before of first game)
+			if (points.length > 0) {
+				dates.push(new Date(points[0].created_at));
+				dataPoints.push({
+					x: globalIndex,
+					y: points[0].elo_before
+				});
+				globalIndex++;
+			}
+
+			// Add all games in this season
+			points.forEach(point => {
+				dates.push(new Date(point.created_at));
+				dataPoints.push({
+					x: globalIndex,
+					y: point.elo_after
+				});
+				globalIndex++;
+			});
+
+			datasets.push({
+				label: seasonName,
+				data: dataPoints,
+				borderColor: seasonColor.border,
+				backgroundColor: seasonColor.bg,
+				borderWidth: 2,
+				pointRadius: 2,
+				pointHoverRadius: 5,
+				pointBackgroundColor: seasonColor.border,
+				pointBorderColor: seasonColor.border,
+				pointHoverBackgroundColor: textColor,
+				pointHoverBorderColor: seasonColor.border,
+				pointBorderWidth: 1,
+				pointHoverBorderWidth: 2,
+				fill: true,
+				tension: 0.15,
+				spanGaps: false
 			});
 		}
 
 		chart = new Chart(ctx, {
 			type: 'line',
-			data: {
-				datasets: [{
-					label: 'ELO Rating',
-					data: dataPoints,
-					borderColor: lineColor,
-					backgroundColor: fillColor,
-					borderWidth: 1,
-					pointRadius: 1.5,
-					pointHoverRadius: 4,
-					pointBackgroundColor: lineColor,
-					pointBorderColor: lineColor,
-					pointHoverBackgroundColor: textColor,
-					pointHoverBorderColor: textColor,
-					pointBorderWidth: 1,
-					pointHoverBorderWidth: 2,
-					fill: true,
-					tension: 0.15
-				}]
-			},
+			data: { datasets },
 			options: {
 				responsive: true,
 				maintainAspectRatio: false,
@@ -147,7 +180,7 @@
 						color: textColor,
 						font: {
 							size: 11,
-							weight: isDark ? '500' : '300',
+							weight: isDark ? 500 : 300,
 							family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
 						},
 						padding: {
@@ -156,7 +189,19 @@
 						}
 					},
 					legend: {
-						display: false
+						display: seasonMap.size > 1,
+						position: 'bottom',
+						labels: {
+							color: textColor,
+							font: {
+								size: 10,
+								weight: isDark ? 400 : 300,
+								family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+							},
+							padding: 12,
+							usePointStyle: true,
+							pointStyle: 'line'
+						}
 					},
 					tooltip: {
 						enabled: true,
@@ -166,15 +211,15 @@
 						borderColor: borderColor,
 						borderWidth: 1,
 						padding: 12,
-						displayColors: false,
+						displayColors: true,
 						titleFont: {
 							size: 10,
-							weight: '400',
+							weight: 400,
 							family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
 						},
 						bodyFont: {
 							size: 11,
-							weight: isDark ? '500' : '300',
+							weight: isDark ? 500 : 300,
 							family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
 						},
 						callbacks: {
@@ -212,7 +257,7 @@
 							color: textColor,
 							font: {
 								size: 9,
-								weight: isDark ? '400' : '300',
+								weight: isDark ? 400 : 300,
 								family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
 							},
 							padding: {
@@ -224,7 +269,7 @@
 							color: textColor,
 							font: {
 								size: 10,
-								weight: '300',
+								weight: 300,
 								family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
 							},
 							padding: 8,
@@ -248,7 +293,7 @@
 							color: textColor,
 							font: {
 								size: 9,
-								weight: isDark ? '400' : '300',
+								weight: isDark ? 400 : 300,
 								family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
 							},
 							padding: {
@@ -259,7 +304,7 @@
 							color: textColor,
 							font: {
 								size: 10,
-								weight: '300',
+								weight: 300,
 								family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
 							},
 							padding: 8

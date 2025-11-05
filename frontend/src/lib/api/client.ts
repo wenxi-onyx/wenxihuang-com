@@ -183,6 +183,8 @@ export interface EloHistoryPoint {
     elo_before: number;
     elo_after: number;
     elo_version: string;
+    season_id: string;
+    season_name: string;
     created_at: string;
 }
 
