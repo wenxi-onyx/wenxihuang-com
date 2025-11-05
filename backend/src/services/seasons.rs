@@ -68,6 +68,7 @@ pub async fn get_all_seasons(pool: &PgPool) -> Result<Vec<Season>, sqlx::Error> 
 /// Create a new season and automatically activate it
 /// This deactivates all previous seasons
 /// If the season is inserted at a historical point, games will be reassigned and affected seasons recalculated
+/// If player_ids is provided, only those players will be included; otherwise all active players will be included
 #[allow(clippy::too_many_arguments)]
 pub async fn create_season(
     pool: &PgPool,
@@ -80,6 +81,7 @@ pub async fn create_season(
     new_player_k_bonus: Option<f64>,
     new_player_bonus_period: Option<i32>,
     created_by: Uuid,
+    player_ids: Option<Vec<Uuid>>,
 ) -> Result<Season, Box<dyn std::error::Error + Send + Sync>> {
     let mut tx = pool.begin().await?;
 
@@ -110,36 +112,114 @@ pub async fn create_season(
 
     tx.commit().await?;
 
-    // Initialize all active players for this season with starting ELO
-    let player_count = initialize_season_players(pool, season.id).await?;
+    // Initialize players for this season with starting ELO
+    // If this fails, we need to clean up the season we just created
+    let player_count = match if let Some(player_ids) = player_ids {
+        // Initialize only specified players
+        initialize_season_with_players(pool, season.id, &player_ids).await
+    } else {
+        // Initialize all active players
+        initialize_season_players(pool, season.id).await
+    } {
+        Ok(count) => count,
+        Err(e) => {
+            tracing::error!(
+                "Failed to initialize players for season '{}': {}",
+                season.name,
+                e
+            );
+            // Clean up: delete the season we just created
+            if let Err(cleanup_err) = sqlx::query("DELETE FROM seasons WHERE id = $1")
+                .bind(season.id)
+                .execute(pool)
+                .await
+            {
+                tracing::error!(
+                    "Failed to clean up season after initialization error: {}",
+                    cleanup_err
+                );
+            }
+            return Err(format!("Failed to initialize players: {}", e).into());
+        }
+    };
+
     tracing::info!(
         "Initialized {} players for season '{}'",
         player_count,
         season.name
     );
 
-    // Check if this is the latest season (most common case)
-    let latest_existing = sqlx::query_as::<_, Season>(
-        "SELECT * FROM seasons WHERE id != $1 ORDER BY start_date DESC LIMIT 1",
-    )
-    .bind(season.id)
-    .fetch_optional(pool)
-    .await?;
+    // Always reassign games to ensure they're in the correct season
+    // This handles both historical insertions and cases where games were imported before season creation
+    tracing::info!("Reassigning games to correct seasons");
+    if let Err(e) = reassign_games_to_seasons(pool).await {
+        tracing::error!(
+            "Failed to reassign games for season '{}': {}",
+            season.name,
+            e
+        );
+        // Clean up: delete the season and player_seasons we just created
+        if let Err(cleanup_err) = cleanup_season(pool, season.id).await {
+            tracing::error!(
+                "Failed to clean up season after reassignment error: {}",
+                cleanup_err
+            );
+        }
+        return Err(format!("Failed to reassign games: {}", e).into());
+    }
 
-    let is_latest = latest_existing
-        .map(|s| season.start_date > s.start_date)
-        .unwrap_or(true);
-
-    if !is_latest {
-        // Historical insertion: reassign games and recalculate affected seasons
-        tracing::info!("Historical season insertion detected, reassigning games");
-        reassign_games_to_seasons(pool).await?;
-        recalculate_seasons_from(pool, start_date).await?;
-    } else {
-        tracing::info!("Latest season created, no reassignment needed");
+    // Recalculate this season and any seasons that come after it
+    tracing::info!(
+        "Recalculating season '{}' and subsequent seasons",
+        season.name
+    );
+    if let Err(e) = recalculate_seasons_from(pool, start_date).await {
+        tracing::error!(
+            "Failed to recalculate ELO for season '{}': {}",
+            season.name,
+            e
+        );
+        // Clean up: delete the season and related data we just created
+        if let Err(cleanup_err) = cleanup_season(pool, season.id).await {
+            tracing::error!(
+                "Failed to clean up season after recalculation error: {}",
+                cleanup_err
+            );
+        }
+        return Err(format!("Failed to recalculate ELO: {}", e).into());
     }
 
     Ok(season)
+}
+
+/// Clean up a season by deleting it and all its associated data
+/// Used for rollback when season creation partially fails
+async fn cleanup_season(
+    pool: &PgPool,
+    season_id: Uuid,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut tx = pool.begin().await?;
+
+    // Delete player_seasons entries
+    sqlx::query("DELETE FROM player_seasons WHERE season_id = $1")
+        .bind(season_id)
+        .execute(&mut *tx)
+        .await?;
+
+    // Delete elo_history entries
+    sqlx::query("DELETE FROM elo_history WHERE season_id = $1")
+        .bind(season_id)
+        .execute(&mut *tx)
+        .await?;
+
+    // Delete the season itself
+    sqlx::query("DELETE FROM seasons WHERE id = $1")
+        .bind(season_id)
+        .execute(&mut *tx)
+        .await?;
+
+    tx.commit().await?;
+    Ok(())
 }
 
 /// Activate a season (deactivates all others)
@@ -160,6 +240,55 @@ pub async fn activate_season(pool: &PgPool, season_id: Uuid) -> Result<(), sqlx:
 
     tx.commit().await?;
     Ok(())
+}
+
+/// Initialize player stats for a new season with specific player IDs
+pub async fn initialize_season_with_players(
+    pool: &PgPool,
+    season_id: Uuid,
+    player_ids: &[Uuid],
+) -> Result<i32, sqlx::Error> {
+    let season = get_season_by_id(pool, season_id)
+        .await?
+        .ok_or_else(|| sqlx::Error::RowNotFound)?;
+
+    let mut count = 0;
+    for player_id in player_ids {
+        // Check if player exists and is active
+        let player_exists: Option<(bool,)> =
+            sqlx::query_as("SELECT is_active FROM players WHERE id = $1")
+                .bind(player_id)
+                .fetch_optional(pool)
+                .await?;
+
+        if player_exists.is_none() {
+            tracing::warn!("Skipping player {} - player not found", player_id);
+            continue;
+        }
+
+        // Check if player_season already exists
+        let exists: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM player_seasons WHERE player_id = $1 AND season_id = $2")
+                .bind(player_id)
+                .bind(season_id)
+                .fetch_optional(pool)
+                .await?;
+
+        if exists.is_none() {
+            sqlx::query(
+                "INSERT INTO player_seasons (player_id, season_id, current_elo, games_played, wins, losses)
+                 VALUES ($1, $2, $3, 0, 0, 0)"
+            )
+            .bind(player_id)
+            .bind(season_id)
+            .bind(season.starting_elo)
+            .execute(pool)
+            .await?;
+            count += 1;
+        }
+    }
+
+    Ok(count)
 }
 
 /// Initialize player stats for a new season (creates player_seasons entries for all active players)
@@ -456,8 +585,8 @@ pub async fn recalculate_season_elo(
     tracing::info!("Recalculating ELO for season: {}", season.name);
 
     // Get all games for this season in chronological order
-    let games: Vec<(Uuid, Uuid, Uuid, DateTime<Utc>)> = sqlx::query_as(
-        "SELECT id, player1_id, player2_id, played_at
+    let games: Vec<(Uuid, Uuid, Uuid, i32, i32, DateTime<Utc>)> = sqlx::query_as(
+        "SELECT id, player1_id, player2_id, player1_score, player2_score, played_at
          FROM games
          WHERE season_id = $1
          ORDER BY played_at ASC",
@@ -503,15 +632,40 @@ pub async fn recalculate_season_elo(
         .await?;
 
     // Process each game
-    for (game_id, winner_id, loser_id, played_at) in games {
-        let winner_elo_before = player_elos
-            .get(&winner_id)
-            .copied()
-            .unwrap_or(season.starting_elo);
-        let loser_elo_before = player_elos
-            .get(&loser_id)
-            .copied()
-            .unwrap_or(season.starting_elo);
+    for (game_id, player1_id, player2_id, player1_score, player2_score, played_at) in games {
+        // Determine winner and loser based on scores
+        let (winner_id, loser_id) = if player1_score > player2_score {
+            (player1_id, player2_id)
+        } else {
+            (player2_id, player1_id)
+        };
+
+        // Validate that both players are in this season
+        let winner_elo_before = match player_elos.get(&winner_id) {
+            Some(&elo) => elo,
+            None => {
+                tracing::warn!(
+                    "Skipping game {}: winner {} is not in season {}",
+                    game_id,
+                    winner_id,
+                    season.name
+                );
+                continue;
+            }
+        };
+
+        let loser_elo_before = match player_elos.get(&loser_id) {
+            Some(&elo) => elo,
+            None => {
+                tracing::warn!(
+                    "Skipping game {}: loser {} is not in season {}",
+                    game_id,
+                    loser_id,
+                    season.name
+                );
+                continue;
+            }
+        };
 
         let winner_games = player_games_played.get(&winner_id).copied().unwrap_or(0);
         let loser_games = player_games_played.get(&loser_id).copied().unwrap_or(0);
@@ -599,13 +753,36 @@ pub async fn recalculate_season_elo(
 /// Reassign all games to their correct seasons based on played_at timestamp
 /// Games are assigned to the season with the latest start_date that is <= game.played_at
 /// Uses efficient SQL-based approach for O(n log n) complexity
+/// Games without a matching season are logged but not modified
 pub async fn reassign_games_to_seasons(
     pool: &PgPool,
 ) -> Result<i32, Box<dyn std::error::Error + Send + Sync>> {
     tracing::info!("Reassigning all games to correct seasons");
 
+    // First, check for games that have no matching season
+    let orphaned_games: Vec<(Uuid, DateTime<Utc>)> = sqlx::query_as(
+        "SELECT id, played_at
+         FROM games
+         WHERE NOT EXISTS (
+             SELECT 1 FROM seasons s WHERE s.start_date <= games.played_at
+         )",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    if !orphaned_games.is_empty() {
+        tracing::warn!(
+            "Found {} games with no matching season (played before earliest season):",
+            orphaned_games.len()
+        );
+        for (game_id, played_at) in &orphaned_games {
+            tracing::warn!("  Game {} played at {}", game_id, played_at);
+        }
+    }
+
     // Use SQL to efficiently reassign all games in one query
     // For each game, find the season with the latest start_date <= game.played_at
+    // Only update games where a matching season exists (subquery returns non-NULL)
     let result = sqlx::query(
         "UPDATE games
          SET season_id = (
@@ -615,14 +792,19 @@ pub async fn reassign_games_to_seasons(
              ORDER BY s.start_date DESC
              LIMIT 1
          )
-         WHERE season_id IS NULL
-            OR season_id != (
-                SELECT s.id
-                FROM seasons s
-                WHERE s.start_date <= games.played_at
-                ORDER BY s.start_date DESC
-                LIMIT 1
-            )",
+         WHERE EXISTS (
+             SELECT 1 FROM seasons s WHERE s.start_date <= games.played_at
+         )
+         AND (
+             season_id IS NULL
+             OR season_id != (
+                 SELECT s.id
+                 FROM seasons s
+                 WHERE s.start_date <= games.played_at
+                 ORDER BY s.start_date DESC
+                 LIMIT 1
+             )
+         )",
     )
     .execute(pool)
     .await?;

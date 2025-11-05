@@ -4,6 +4,7 @@ RUN apk add --no-cache musl-dev pkgconfig openssl-dev
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY migrations ./migrations
+COPY .sqlx ./.sqlx
 RUN cargo build --release
 
 FROM alpine:3.22

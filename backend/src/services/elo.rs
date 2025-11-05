@@ -23,15 +23,51 @@ struct Game {
     played_at: DateTime<chrono::Utc>,
 }
 
-#[allow(dead_code)]
-fn calculate_elo_change(winner_elo: f64, loser_elo: f64, k_factor: f64) -> (f64, f64) {
-    let expected_winner = 1.0 / (1.0 + 10_f64.powf((loser_elo - winner_elo) / 400.0));
-    let expected_loser = 1.0 - expected_winner;
+/// K-factor configuration parameters
+#[derive(Debug, Clone)]
+pub struct KFactorConfig {
+    pub k_factor: f64,
+    pub base_k_factor: Option<f64>,
+    pub new_player_k_bonus: Option<f64>,
+    pub new_player_bonus_period: Option<i32>,
+}
 
-    let winner_change = k_factor * (1.0 - expected_winner);
-    let loser_change = k_factor * (0.0 - expected_loser);
+/// Calculate ELO change for two players based on match result
+/// Returns (player1_elo_change, player2_elo_change)
+pub fn calculate_elo_change(
+    player1_elo: f64,
+    player2_elo: f64,
+    player1_won: bool,
+    k_config: &KFactorConfig,
+    player1_games_played: i32,
+    player2_games_played: i32,
+) -> (f64, f64) {
+    // Create a temporary config for K-factor calculation
+    let temp_config = EloConfig {
+        version_name: "temp".to_string(),
+        k_factor: k_config.k_factor,
+        starting_elo: 1000.0,
+        base_k_factor: k_config.base_k_factor,
+        new_player_k_bonus: k_config.new_player_k_bonus,
+        new_player_bonus_period: k_config.new_player_bonus_period,
+    };
 
-    (winner_change, loser_change)
+    // Calculate dynamic K-factors for both players
+    let player1_k = calculate_dynamic_k_factor(&temp_config, player1_games_played);
+    let player2_k = calculate_dynamic_k_factor(&temp_config, player2_games_played);
+
+    // Calculate expected scores
+    let expected_player1 = 1.0 / (1.0 + 10_f64.powf((player2_elo - player1_elo) / 400.0));
+    let expected_player2 = 1.0 - expected_player1;
+
+    // Calculate actual scores
+    let (player1_score, player2_score) = if player1_won { (1.0, 0.0) } else { (0.0, 1.0) };
+
+    // Calculate ELO changes with player-specific K-factors
+    let player1_change = player1_k * (player1_score - expected_player1);
+    let player2_change = player2_k * (player2_score - expected_player2);
+
+    (player1_change, player2_change)
 }
 
 /// Calculate dynamic K-factor based on player experience

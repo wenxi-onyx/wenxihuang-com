@@ -1,13 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { authStore } from '$lib/stores/auth';
-	import { adminApi, seasonsApi, type Season, type CreateSeasonRequest, type SeasonPlayer } from '$lib/api/client';
+	import { adminApi, seasonsApi, playersApi, type Season, type CreateSeasonRequest, type SeasonPlayer, type PlayerWithStats } from '$lib/api/client';
 	import { goto } from '$app/navigation';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import LoginButton from '$lib/components/LoginButton.svelte';
 	import Toast, { showToast } from '$lib/components/Toast.svelte';
 
-	const user = $derived($authStore.user);
 	let seasons: Season[] = $state([]);
 	let loading = $state(true);
 	let authChecked = $state(false);
@@ -25,14 +24,17 @@
 	let newSeasonStartDate = $state('');
 	let newSeasonStartingElo = $state(1000);
 	let newSeasonKFactor = $state(32);
+	let allPlayersForCreate = $state<PlayerWithStats[]>([]);
+	let selectedPlayerIds = $state<Set<string>>(new Set());
+	let loadingCreatePlayers = $state(false);
 
 	onMount(async () => {
 		// Wait for auth to load first to avoid race condition
-		await authStore.checkAuth();
+		const currentUser = await authStore.checkAuth();
 		authChecked = true;
 
 		// Check if user is admin
-		if (!user || user.role !== 'admin') {
+		if (!currentUser || currentUser.role !== 'admin') {
 			showToast('Admin access required', 'error');
 			goto('/table-tennis');
 			return;
@@ -49,6 +51,22 @@
 			showToast(e instanceof Error ? e.message : 'Failed to load seasons', 'error');
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadPlayersForCreate() {
+		if (allPlayersForCreate.length > 0) return; // Already loaded
+
+		loadingCreatePlayers = true;
+		try {
+			const players = await playersApi.listPlayers();
+			allPlayersForCreate = players.filter(p => p.is_active);
+			// By default, select all active players
+			selectedPlayerIds = new Set(allPlayersForCreate.map(p => p.id));
+		} catch (e) {
+			showToast(e instanceof Error ? e.message : 'Failed to load players', 'error');
+		} finally {
+			loadingCreatePlayers = false;
 		}
 	}
 
@@ -74,6 +92,7 @@
 				start_date: utcDate.toISOString(),
 				starting_elo: newSeasonStartingElo,
 				k_factor: newSeasonKFactor,
+				player_ids: selectedPlayerIds.size > 0 ? Array.from(selectedPlayerIds) : undefined,
 			};
 
 			await adminApi.createSeason(seasonData);
@@ -85,6 +104,8 @@
 			newSeasonStartDate = '';
 			newSeasonStartingElo = 1000;
 			newSeasonKFactor = 32;
+			allPlayersForCreate = [];
+			selectedPlayerIds = new Set();
 			showCreateForm = false;
 
 			// Reload seasons
@@ -235,7 +256,12 @@
 					<h2>CREATE NEW SEASON</h2>
 					<button
 						class="btn-toggle"
-						onclick={() => showCreateForm = !showCreateForm}
+						onclick={() => {
+							showCreateForm = !showCreateForm;
+							if (showCreateForm) {
+								loadPlayersForCreate();
+							}
+						}}
 					>
 						{showCreateForm ? 'CANCEL' : 'NEW SEASON'}
 					</button>
@@ -300,6 +326,62 @@
 									step="1"
 								/>
 							</div>
+						</div>
+
+						<div class="form-group player-selection">
+							<label>SELECT PLAYERS ({selectedPlayerIds.size} selected)</label>
+							{#if loadingCreatePlayers}
+								<div class="loading-players-create">Loading players...</div>
+							{:else if allPlayersForCreate.length === 0}
+								<div class="no-players">No active players found</div>
+							{:else}
+								<!-- Debug: {JSON.stringify(Array.from(selectedPlayerIds))} -->
+								<div class="player-select-controls">
+									<button
+										type="button"
+										class="btn-select-all"
+										onclick={() => selectedPlayerIds = new Set(allPlayersForCreate.map(p => p.id))}
+									>
+										SELECT ALL
+									</button>
+									<button
+										type="button"
+										class="btn-select-none"
+										onclick={() => selectedPlayerIds = new Set()}
+									>
+										CLEAR ALL
+									</button>
+								</div>
+								<div class="player-selection-list">
+									{#each allPlayersForCreate as player (player.id)}
+										{@const isSelected = selectedPlayerIds.has(player.id)}
+										<label class="player-checkbox">
+											<input
+												type="checkbox"
+												checked={isSelected}
+												onclick={(e) => {
+													e.stopPropagation();
+													const newSet = new Set(selectedPlayerIds);
+													if (e.currentTarget.checked) {
+														newSet.add(player.id);
+													} else {
+														newSet.delete(player.id);
+													}
+													selectedPlayerIds = newSet;
+													console.log('Selected players:', Array.from(newSet));
+												}}
+											/>
+											<span class="player-checkbox-label">
+												{player.name}
+												<span class="player-stats">
+													(ELO: {player.current_elo.toFixed(0)},
+													{player.games_played} games)
+												</span>
+											</span>
+										</label>
+									{/each}
+								</div>
+							{/if}
 						</div>
 
 						<button type="submit" class="btn-submit" disabled={creating}>
@@ -479,7 +561,7 @@
 		align-items: center;
 		margin-bottom: 3rem;
 		padding-bottom: 1rem;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+		border-bottom: 1px solid var(--border-subtle);
 	}
 
 	h1 {
@@ -488,6 +570,7 @@
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
 		margin: 0;
+		color: var(--text-primary);
 	}
 
 	.nav-links a {
@@ -496,7 +579,7 @@
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
 		text-decoration: none;
-		color: inherit;
+		color: var(--text-primary);
 		opacity: 0.7;
 		transition: opacity 0.2s ease;
 	}
@@ -513,7 +596,7 @@
 
 	.section {
 		background: transparent;
-		border: 1px solid rgba(255, 255, 255, 0.1);
+		border: 1px solid var(--border-subtle);
 		padding: 2rem;
 	}
 
@@ -530,13 +613,14 @@
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
 		margin: 0 0 1.5rem 0;
+		color: var(--text-primary);
 	}
 
 	.btn-toggle {
 		padding: 0.5rem 1rem;
 		background: transparent;
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		color: inherit;
+		border: 1px solid var(--border-subtle);
+		color: var(--text-primary);
 		font-size: 0.75rem;
 		font-weight: 300;
 		letter-spacing: 0.1em;
@@ -546,8 +630,8 @@
 	}
 
 	.btn-toggle:hover {
-		border-color: rgba(255, 255, 255, 0.4);
-		background: rgba(255, 255, 255, 0.05);
+		border-color: var(--border-active);
+		background: var(--border-subtle);
 	}
 
 	.create-form {
@@ -555,7 +639,7 @@
 		flex-direction: column;
 		gap: 1.5rem;
 		padding-top: 1.5rem;
-		border-top: 1px solid rgba(255, 255, 255, 0.1);
+		border-top: 1px solid var(--border-subtle);
 	}
 
 	.form-row {
@@ -575,14 +659,15 @@
 		font-weight: 300;
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
+		color: var(--text-primary);
 		opacity: 0.7;
 	}
 
 	input {
 		padding: 0.75rem;
 		background: transparent;
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		color: inherit;
+		border: 1px solid var(--border-subtle);
+		color: var(--text-primary);
 		font-family: inherit;
 		font-size: 0.875rem;
 		font-weight: 300;
@@ -591,14 +676,14 @@
 
 	input:focus {
 		outline: none;
-		border-color: rgba(255, 255, 255, 0.4);
+		border-color: var(--border-active);
 	}
 
 	.btn-submit {
 		padding: 1rem;
 		background: transparent;
-		border: 1px solid rgba(255, 255, 255, 0.3);
-		color: inherit;
+		border: 1px solid var(--border-subtle);
+		color: var(--text-primary);
 		font-size: 0.875rem;
 		font-weight: 300;
 		letter-spacing: 0.1em;
@@ -608,8 +693,8 @@
 	}
 
 	.btn-submit:hover:not(:disabled) {
-		border-color: rgba(255, 255, 255, 0.5);
-		background: rgba(255, 255, 255, 0.05);
+		border-color: var(--border-active);
+		background: var(--border-subtle);
 	}
 
 	.btn-submit:disabled {
@@ -620,6 +705,7 @@
 	.loading, .empty-state {
 		text-align: center;
 		padding: 3rem;
+		color: var(--text-primary);
 		opacity: 0.7;
 		font-weight: 300;
 		letter-spacing: 0.05em;
@@ -633,13 +719,13 @@
 
 	.season-card {
 		background: transparent;
-		border: 1px solid rgba(255, 255, 255, 0.1);
+		border: 1px solid var(--border-subtle);
 		padding: 1.5rem;
 		transition: border-color 0.2s ease;
 	}
 
 	.season-card.active {
-		border-color: rgba(255, 255, 255, 0.3);
+		border-color: var(--border-active);
 	}
 
 	.season-header {
@@ -662,6 +748,7 @@
 		letter-spacing: 0.05em;
 		text-transform: uppercase;
 		margin: 0 0 0.5rem 0;
+		color: var(--text-primary);
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
@@ -670,13 +757,15 @@
 	.badge {
 		font-size: 0.625rem;
 		padding: 0.25rem 0.5rem;
-		border: 1px solid rgba(255, 255, 255, 0.3);
+		border: 1px solid var(--border-subtle);
 		letter-spacing: 0.1em;
+		color: var(--text-primary);
 	}
 
 	.description {
 		font-size: 0.875rem;
 		font-weight: 300;
+		color: var(--text-primary);
 		opacity: 0.7;
 		margin: 0;
 	}
@@ -698,12 +787,14 @@
 		font-weight: 300;
 		letter-spacing: 0.1em;
 		text-transform: uppercase;
+		color: var(--text-primary);
 		opacity: 0.5;
 	}
 
 	.meta-item .value {
 		font-size: 0.875rem;
 		font-weight: 300;
+		color: var(--text-primary);
 	}
 
 	.season-actions {
@@ -715,8 +806,8 @@
 	.btn-action {
 		padding: 0.5rem 1rem;
 		background: transparent;
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		color: inherit;
+		border: 1px solid var(--border-subtle);
+		color: var(--text-primary);
 		font-size: 0.75rem;
 		font-weight: 300;
 		letter-spacing: 0.1em;
@@ -726,8 +817,8 @@
 	}
 
 	.btn-action:hover:not(:disabled) {
-		border-color: rgba(255, 255, 255, 0.4);
-		background: rgba(255, 255, 255, 0.05);
+		border-color: var(--border-active);
+		background: var(--border-subtle);
 	}
 
 	.btn-action:disabled {
@@ -744,12 +835,13 @@
 	.player-management {
 		margin-top: 1.5rem;
 		padding-top: 1.5rem;
-		border-top: 1px solid rgba(255, 255, 255, 0.1);
+		border-top: 1px solid var(--border-subtle);
 	}
 
 	.loading-players {
 		text-align: center;
 		padding: 2rem;
+		color: var(--text-primary);
 		opacity: 0.7;
 	}
 
@@ -762,6 +854,7 @@
 		font-weight: 300;
 		letter-spacing: 0.1em;
 		margin: 0 0 1rem 0;
+		color: var(--text-primary);
 		opacity: 0.8;
 	}
 
@@ -777,12 +870,12 @@
 		align-items: center;
 		padding: 0.75rem 1rem;
 		background: transparent;
-		border: 1px solid rgba(255, 255, 255, 0.1);
+		border: 1px solid var(--border-subtle);
 		transition: border-color 0.2s ease;
 	}
 
 	.player-item:hover {
-		border-color: rgba(255, 255, 255, 0.2);
+		border-color: var(--border-active);
 	}
 
 	.player-item.inactive {
@@ -792,6 +885,7 @@
 	.player-name {
 		font-size: 0.875rem;
 		font-weight: 300;
+		color: var(--text-primary);
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -800,8 +894,9 @@
 	.player-badge {
 		font-size: 0.625rem;
 		padding: 0.125rem 0.5rem;
-		border: 1px solid rgba(255, 255, 255, 0.2);
+		border: 1px solid var(--border-subtle);
 		letter-spacing: 0.1em;
+		color: var(--text-primary);
 		opacity: 0.6;
 	}
 
@@ -809,8 +904,8 @@
 	.btn-remove {
 		padding: 0.375rem 0.75rem;
 		background: transparent;
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		color: inherit;
+		border: 1px solid var(--border-subtle);
+		color: var(--text-primary);
 		font-size: 0.625rem;
 		font-weight: 300;
 		letter-spacing: 0.1em;
@@ -834,8 +929,99 @@
 	.empty-message {
 		text-align: center;
 		padding: 2rem;
+		color: var(--text-primary);
 		opacity: 0.5;
 		font-size: 0.875rem;
+	}
+
+	.player-selection {
+		grid-column: 1 / -1;
+	}
+
+	.loading-players-create,
+	.no-players {
+		text-align: center;
+		padding: 2rem;
+		opacity: 0.5;
+		font-size: 0.875rem;
+	}
+
+	.player-select-controls {
+		display: flex;
+		gap: 0.5rem;
+		margin-bottom: 1rem;
+	}
+
+	.btn-select-all,
+	.btn-select-none {
+		padding: 0.5rem 1rem;
+		background: transparent;
+		border: 1px solid var(--border-subtle);
+		color: var(--text-primary);
+		font-size: 0.75rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.btn-select-all:hover {
+		border-color: rgba(100, 255, 100, 0.5);
+		background: rgba(100, 255, 100, 0.05);
+	}
+
+	.btn-select-none:hover {
+		border-color: rgba(255, 100, 100, 0.5);
+		background: rgba(255, 100, 100, 0.05);
+	}
+
+	.player-selection-list {
+		max-height: 300px;
+		overflow-y: auto;
+		border: 1px solid var(--border-subtle);
+		padding: 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.player-checkbox {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		cursor: pointer;
+		padding: 0.5rem;
+		border: 1px solid transparent;
+		transition: border-color 0.2s ease;
+	}
+
+	.player-checkbox:hover {
+		border-color: var(--border-subtle);
+	}
+
+	.player-checkbox input[type="checkbox"] {
+		width: 1.25rem;
+		height: 1.25rem;
+		cursor: pointer;
+		margin: 0;
+		padding: 0;
+		-webkit-appearance: checkbox;
+		appearance: checkbox;
+		accent-color: var(--text-primary);
+		flex-shrink: 0;
+	}
+
+	.player-checkbox-label {
+		font-size: 0.875rem;
+		font-weight: 300;
+		flex: 1;
+	}
+
+	.player-stats {
+		font-size: 0.75rem;
+		opacity: 0.6;
+		margin-left: 0.5rem;
 	}
 
 	@media (max-width: 768px) {

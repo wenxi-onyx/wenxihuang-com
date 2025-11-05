@@ -11,11 +11,13 @@
 
 	// Redirect if already logged in
 	onMount(() => {
-		authStore.subscribe((state) => {
+		const unsubscribe = authStore.subscribe((state) => {
 			if (state.user && !state.loading) {
 				goto('/');
 			}
 		});
+
+		return unsubscribe; // Clean up subscription when component is destroyed
 	});
 
 	async function handleSubmit() {

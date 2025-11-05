@@ -82,6 +82,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         None,
         None,
         admin_id,
+        None, // Initialize all active players
     )
     .await?;
 

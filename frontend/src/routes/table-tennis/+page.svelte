@@ -184,6 +184,10 @@
 	<header class="page-header">
 		<h1>Table Tennis Leaderboard</h1>
 		<nav class="nav-links">
+			{#if user}
+				<a href="/table-tennis/add-match">ADD MATCH</a>
+			{/if}
+			<a href="/table-tennis/matches">MATCH HISTORY</a>
 			{#if user?.role === 'admin'}
 				<a href="/table-tennis/seasons">MANAGE SEASONS</a>
 			{/if}

@@ -53,7 +53,6 @@
 
     async function handleProfileUpdate(e: Event) {
         e.preventDefault();
-
         profileLoading = true;
 
         // Trim fields before sending
@@ -90,7 +89,6 @@
 
     async function handlePasswordChange(e: Event) {
         e.preventDefault();
-
         // Validation
         if (newPassword.length < 6) {
             showToast('Password must be at least 6 characters', 'error');

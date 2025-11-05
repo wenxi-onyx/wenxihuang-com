@@ -29,6 +29,7 @@ pub struct CreateSeasonRequest {
     pub base_k_factor: Option<f64>,
     pub new_player_k_bonus: Option<f64>,
     pub new_player_bonus_period: Option<i32>,
+    pub player_ids: Option<Vec<Uuid>>, // Optional list of player IDs to include in the season
 }
 
 #[derive(Debug, Serialize)]
@@ -160,6 +161,17 @@ pub async fn create_season(
     }
 
     // Validate dynamic K-factor fields
+    // If any dynamic K-factor field is provided, all three must be provided
+    let has_base_k = req.base_k_factor.is_some();
+    let has_bonus = req.new_player_k_bonus.is_some();
+    let has_period = req.new_player_bonus_period.is_some();
+
+    if (has_base_k || has_bonus || has_period) && (!has_base_k || !has_bonus || !has_period) {
+        return Err(AuthError::InvalidInput(
+            "Dynamic K-factor requires all three fields: base_k_factor, new_player_k_bonus, and new_player_bonus_period".to_string(),
+        ));
+    }
+
     if let Some(base_k) = req.base_k_factor
         && !(MIN_K_FACTOR..=MAX_K_FACTOR).contains(&base_k)
     {
@@ -212,6 +224,7 @@ pub async fn create_season(
         req.new_player_k_bonus,
         req.new_player_bonus_period,
         admin_user.id,
+        req.player_ids,
     )
     .await
     .map_err(|e| {
@@ -287,6 +300,62 @@ pub async fn get_season_leaderboard(
                 }
             },
         )
+        .collect();
+
+    Ok(Json(response))
+}
+
+#[derive(Debug, Serialize)]
+pub struct ActiveSeasonPlayerResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub current_elo: f64,
+    pub is_active: bool,
+}
+
+/// Get active players in the active season (public endpoint for form)
+pub async fn get_active_season_players(
+    State(pool): State<PgPool>,
+) -> Result<Json<Vec<ActiveSeasonPlayerResponse>>, AuthError> {
+    // Get active season
+    let active_season = seasons::get_active_season(&pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch active season: {}", e);
+            AuthError::DatabaseError
+        })?
+        .ok_or(AuthError::InvalidInput(
+            "No active season found".to_string(),
+        ))?;
+
+    // Get players in the active season who are included and active
+    let players = sqlx::query!(
+        r#"
+        SELECT p.id, p.first_name, p.last_name, ps.current_elo, p.is_active
+        FROM players p
+        INNER JOIN player_seasons ps ON p.id = ps.player_id
+        WHERE ps.season_id = $1
+          AND ps.is_included = true
+          AND p.is_active = true
+        ORDER BY p.first_name, p.last_name
+        "#,
+        active_season.id
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to fetch active season players: {}", e);
+        AuthError::DatabaseError
+    })?;
+
+    let response: Vec<ActiveSeasonPlayerResponse> = players
+        .into_iter()
+        .map(|p| ActiveSeasonPlayerResponse {
+            id: p.id,
+            name: format!("{} {}", p.first_name, p.last_name),
+            current_elo: p.current_elo,
+            is_active: p.is_active,
+        })
         .collect();
 
     Ok(Json(response))

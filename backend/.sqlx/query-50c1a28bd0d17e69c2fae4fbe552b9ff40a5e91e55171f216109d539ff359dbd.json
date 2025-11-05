@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT current_elo, games_played, is_included\n        FROM player_seasons\n        WHERE player_id = $1 AND season_id = $2\n        FOR UPDATE\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "current_elo",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 1,
+        "name": "games_played",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_included",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "50c1a28bd0d17e69c2fae4fbe552b9ff40a5e91e55171f216109d539ff359dbd"
+}

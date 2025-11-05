@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) as count\n        FROM games g\n        INNER JOIN elo_history eh1 ON g.id = eh1.game_id\n            AND eh1.player_id = g.player1_id\n            AND eh1.season_id = g.season_id\n        INNER JOIN elo_history eh2 ON g.id = eh2.game_id\n            AND eh2.player_id = g.player2_id\n            AND eh2.season_id = g.season_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9c4fea298be36035afeb2ab6bc08502245eca1f696ef8be021ccccbdec6c2b16"
+}

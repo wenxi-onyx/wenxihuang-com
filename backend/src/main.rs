@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post, put},
 };
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
@@ -98,6 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/profile", get(handlers::user::get_profile))
         .route("/profile", put(handlers::user::update_profile))
         .route("/change-password", post(handlers::user::change_password))
+        .route("/games", post(handlers::games::create_game))
         .route_layer(axum::middleware::from_fn_with_state(
             pool.clone(),
             self::middleware::auth::require_auth,
@@ -163,6 +164,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/seasons/{season_id}/players/remove",
             post(handlers::seasons::remove_player_from_season),
         )
+        // Game management routes
+        .route("/games/{game_id}", delete(handlers::games::delete_game))
+        .route("/games/{game_id}", patch(handlers::games::update_game))
         .route_layer(axum::middleware::from_fn_with_state(
             pool.clone(),
             self::middleware::auth::require_admin,
@@ -178,11 +182,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Season routes
         .route("/seasons", get(handlers::seasons::list_seasons))
         .route("/seasons/active", get(handlers::seasons::get_active_season))
+        .route(
+            "/seasons/active/players",
+            get(handlers::seasons::get_active_season_players),
+        )
         .route("/seasons/{season_id}", get(handlers::seasons::get_season))
         .route(
             "/seasons/{season_id}/leaderboard",
             get(handlers::seasons::get_season_leaderboard),
-        );
+        )
+        // Game routes
+        .route("/games", get(handlers::games::list_games));
 
     tracing::info!("Routes configured successfully");
 

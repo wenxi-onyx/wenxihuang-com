@@ -1,15 +1,8 @@
 <script lang="ts">
 	import { theme } from '$lib/stores/theme';
 
-	let currentTheme: 'dark' | 'light' = $state('dark');
-
-	// Subscribe to theme changes
-	$effect(() => {
-		const unsubscribe = theme.subscribe((value) => {
-			currentTheme = value;
-		});
-		return unsubscribe;
-	});
+	// Use $derived to reactively track the theme store value
+	let currentTheme = $derived($theme);
 </script>
 
 <button class="theme-toggle" onclick={() => theme.toggle()} aria-label="Toggle theme">
