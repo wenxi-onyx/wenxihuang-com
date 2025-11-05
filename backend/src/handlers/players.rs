@@ -66,6 +66,8 @@ pub struct EloHistoryPoint {
     pub elo_before: f64,
     pub elo_after: f64,
     pub elo_version: String,
+    pub season_id: Uuid,
+    pub season_name: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -74,10 +76,12 @@ pub async fn get_player_history(
     axum::extract::Path(player_id): axum::extract::Path<Uuid>,
 ) -> Result<Json<Vec<EloHistoryPoint>>, AuthError> {
     let history: Vec<EloHistoryPoint> = sqlx::query_as(
-        "SELECT game_id, elo_before, elo_after, elo_version, created_at
-         FROM elo_history
-         WHERE player_id = $1
-         ORDER BY created_at ASC",
+        "SELECT eh.game_id, eh.elo_before, eh.elo_after, eh.elo_version,
+                eh.season_id, s.name as season_name, eh.created_at
+         FROM elo_history eh
+         JOIN seasons s ON eh.season_id = s.id
+         WHERE eh.player_id = $1
+         ORDER BY eh.created_at ASC",
     )
     .bind(player_id)
     .fetch_all(&pool)

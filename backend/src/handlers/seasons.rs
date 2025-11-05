@@ -428,17 +428,18 @@ pub async fn delete_season(
         })?
         .ok_or(AuthError::InvalidInput("Season not found".to_string()))?;
 
-    // Spawn background task for deletion
-    let pool_clone = pool.clone();
     let season_name = season.name.clone();
-    tokio::spawn(async move {
-        if let Err(e) = seasons::delete_season(&pool_clone, season_id).await {
+
+    // Delete synchronously
+    seasons::delete_season(&pool, season_id)
+        .await
+        .map_err(|e| {
             tracing::error!("Failed to delete season: {}", e);
-        }
-    });
+            AuthError::DatabaseError
+        })?;
 
     Ok(Json(serde_json::json!({
-        "message": format!("Started deletion of season '{}'. Games will be reassigned and affected seasons recalculated.", season_name)
+        "message": format!("Season '{}' deleted successfully. Games reassigned and affected seasons recalculated.", season_name)
     })))
 }
 
