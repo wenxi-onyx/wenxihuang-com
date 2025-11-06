@@ -1,5 +1,6 @@
 # Plans directory (v2 feature)
 /plans/
+!/plans/mult-chatgpt/
 
 # IDE
 .vscode/*
