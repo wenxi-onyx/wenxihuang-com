@@ -84,16 +84,16 @@
 			width: 100%;
 		}
 
-		/* Reorder cards on mobile: Table Tennis first */
+		/* Reorder cards on mobile: Table Tennis first, Multiplayer ChatGPT second */
 		.card-2 {
 			order: 1;
 		}
 
-		.card-1 {
+		.card-3 {
 			order: 2;
 		}
 
-		.card-3 {
+		.card-1 {
 			order: 3;
 		}
 	}
