@@ -124,6 +124,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Setting up routes...");
 
+    // Initialize presence state
+    let presence_state = services::presence::PresenceState::new();
+    tracing::info!("Presence tracking initialized");
+
     // Auth routes
     let auth_routes = Router::new()
         .route("/login", post(handlers::auth::login))
@@ -266,6 +270,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Routes configured successfully");
 
+    // WebSocket route for presence (authentication handled in handler)
+    let presence_routes = Router::new().route("/ws", get(handlers::presence::websocket_handler));
+
     // Build our application with routes
     let app = Router::new()
         .route("/", get(root))
@@ -273,8 +280,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/api/auth", auth_routes)
         .nest("/api/user", user_routes)
         .nest("/api/admin", admin_routes)
+        .nest("/api/presence", presence_routes)
         .nest("/api", public_routes)
         .with_state(pool)
+        .layer(axum::Extension(presence_state))
         .layer(TraceLayer::new_for_http())
         .layer(CookieManagerLayer::new())
         .layer(self::middleware::cors::cors_layer());

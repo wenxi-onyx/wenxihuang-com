@@ -4,6 +4,7 @@
 	import { playersApi, type PlayerWithStats, type EloHistoryPoint, type PlayerMatch } from '$lib/api/client';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import LoginButton from '$lib/components/LoginButton.svelte';
+	import Presence from '$lib/components/Presence.svelte';
 	import {
 		Chart,
 		LineController,
@@ -384,6 +385,7 @@
 
 <ThemeToggle />
 <LoginButton />
+<Presence />
 
 <div class="container">
 	{#if loading}
@@ -615,11 +617,6 @@
 		border: 1px solid var(--border-subtle);
 		padding: 1.5rem;
 		text-align: center;
-		transition: opacity 0.15s;
-	}
-
-	.stat-card:hover {
-		opacity: 0.8;
 	}
 
 	.stat-label {

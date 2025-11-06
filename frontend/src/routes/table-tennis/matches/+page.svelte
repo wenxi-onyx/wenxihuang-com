@@ -8,6 +8,7 @@
 	import Toast, { showToast } from '$lib/components/Toast.svelte';
 	import ConfirmModal, { confirm } from '$lib/components/ConfirmModal.svelte';
 	import AddMatchModal, { openAddMatchModal } from '$lib/components/AddMatchModal.svelte';
+	import Presence from '$lib/components/Presence.svelte';
 
 	const user = $derived($authStore.user);
 	const isAdmin = $derived(user?.role === 'admin');
@@ -142,6 +143,7 @@
 <Toast />
 <ConfirmModal />
 <AddMatchModal />
+<Presence />
 
 <div class="container">
 	<header class="page-header">

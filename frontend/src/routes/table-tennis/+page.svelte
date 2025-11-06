@@ -6,6 +6,7 @@
 	import LoginButton from '$lib/components/LoginButton.svelte';
 	import AddMatchModal, { openAddMatchModal } from '$lib/components/AddMatchModal.svelte';
 	import Toast, { showToast } from '$lib/components/Toast.svelte';
+	import Presence from '$lib/components/Presence.svelte';
 	import {
 		Chart,
 		LineController,
@@ -533,6 +534,7 @@
 <LoginButton />
 <AddMatchModal />
 <Toast />
+<Presence />
 
 <div class="container">
 	<header class="page-header">
@@ -602,25 +604,25 @@
 				<thead>
 					<tr>
 						<th class="sortable" onclick={() => handleSort('rank')}>
-							Rank {sortField === 'rank' ? (sortDirection === 'desc' ? '▼' : '▲') : ''}
+							Rank <span class="sort-arrow" class:visible={sortField === 'rank'}>{sortDirection === 'desc' ? '▼' : '▲'}</span>
 						</th>
 						<th class="sortable" onclick={() => handleSort('name')}>
-							Player {sortField === 'name' ? (sortDirection === 'desc' ? '▼' : '▲') : ''}
+							Player <span class="sort-arrow" class:visible={sortField === 'name'}>{sortDirection === 'desc' ? '▼' : '▲'}</span>
 						</th>
 						<th class="sortable" onclick={() => handleSort('current_elo')}>
-							ELO Rating {sortField === 'current_elo' ? (sortDirection === 'desc' ? '▼' : '▲') : ''}
+							ELO Rating <span class="sort-arrow" class:visible={sortField === 'current_elo'}>{sortDirection === 'desc' ? '▼' : '▲'}</span>
 						</th>
 						<th class="sortable" onclick={() => handleSort('games_played')}>
-							Games {sortField === 'games_played' ? (sortDirection === 'desc' ? '▼' : '▲') : ''}
+							Games <span class="sort-arrow" class:visible={sortField === 'games_played'}>{sortDirection === 'desc' ? '▼' : '▲'}</span>
 						</th>
 						<th class="sortable" onclick={() => handleSort('wins')}>
-							Wins {sortField === 'wins' ? (sortDirection === 'desc' ? '▼' : '▲') : ''}
+							Wins <span class="sort-arrow" class:visible={sortField === 'wins'}>{sortDirection === 'desc' ? '▼' : '▲'}</span>
 						</th>
 						<th class="sortable" onclick={() => handleSort('losses')}>
-							Losses {sortField === 'losses' ? (sortDirection === 'desc' ? '▼' : '▲') : ''}
+							Losses <span class="sort-arrow" class:visible={sortField === 'losses'}>{sortDirection === 'desc' ? '▼' : '▲'}</span>
 						</th>
 						<th class="sortable" onclick={() => handleSort('win_rate')}>
-							Win Rate {sortField === 'win_rate' ? (sortDirection === 'desc' ? '▼' : '▲') : ''}
+							Win Rate <span class="sort-arrow" class:visible={sortField === 'win_rate'}>{sortDirection === 'desc' ? '▼' : '▲'}</span>
 						</th>
 						<th>Actions</th>
 					</tr>
@@ -980,6 +982,17 @@
 	}
 
 	.leaderboard-table th.sortable:hover {
+		opacity: 1;
+	}
+
+	.sort-arrow {
+		display: inline-block;
+		width: 0.75em;
+		opacity: 0;
+		transition: opacity 0.2s;
+	}
+
+	.sort-arrow.visible {
 		opacity: 1;
 	}
 

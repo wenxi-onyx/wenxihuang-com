@@ -7,6 +7,7 @@
 	import LoginButton from '$lib/components/LoginButton.svelte';
 	import Toast, { showToast } from '$lib/components/Toast.svelte';
 	import ConfirmModal, { confirm } from '$lib/components/ConfirmModal.svelte';
+	import Presence from '$lib/components/Presence.svelte';
 
 	let players = $state<PlayerWithStats[]>([]);
 	let loading = $state(true);
@@ -113,6 +114,7 @@
 <LoginButton />
 <Toast />
 <ConfirmModal />
+<Presence />
 
 <div class="container">
 	<header class="page-header">
@@ -189,7 +191,9 @@
 					{#each filteredPlayers as player}
 						<tr class:inactive-row={!player.is_active}>
 							<td class="name-cell">
-								<span class="player-name">{player.name}</span>
+								<a href="/table-tennis/players/{player.id}" class="player-name-link">
+									{player.name}
+								</a>
 							</td>
 							<td class="elo-cell">
 								<span class="elo-value">{player.current_elo.toFixed(1)}</span>
@@ -213,9 +217,6 @@
 								>
 									{player.is_active ? 'Deactivate' : 'Activate'}
 								</button>
-								<a href="/table-tennis/players/{player.id}" class="btn-view">
-									View History
-								</a>
 							</td>
 						</tr>
 					{:else}
@@ -439,6 +440,18 @@
 		font-size: 0.875rem;
 		font-weight: 300;
 		color: var(--text-primary);
+	}
+
+	.player-name-link {
+		color: var(--text-primary);
+		text-decoration: none;
+		transition: opacity 0.2s ease;
+	}
+
+	.player-name-link:hover {
+		opacity: 0.6;
+		text-decoration: underline;
+		text-decoration-thickness: 0.5px;
 	}
 
 	.elo-value {
