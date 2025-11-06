@@ -411,10 +411,13 @@
 			</div>
 
 			<div class="stat-card">
-				<div class="stat-label">Total Change</div>
-				<div class="stat-value" class:positive={getEloChange().startsWith('+')} class:negative={getEloChange().startsWith('-')}>
-					{getEloChange()}
-				</div>
+				<div class="stat-label">Peak ELO</div>
+				<div class="stat-value">{getHighestElo().toFixed(1)}</div>
+			</div>
+
+			<div class="stat-card">
+				<div class="stat-label">Lowest ELO</div>
+				<div class="stat-value">{getLowestElo().toFixed(1)}</div>
 			</div>
 
 			<div class="stat-card">
@@ -432,16 +435,6 @@
 				<div class="stat-value">
 					<span class="wins">{player.wins}</span> / <span class="losses">{player.losses}</span>
 				</div>
-			</div>
-
-			<div class="stat-card">
-				<div class="stat-label">Peak ELO</div>
-				<div class="stat-value">{getHighestElo().toFixed(1)}</div>
-			</div>
-
-			<div class="stat-card">
-				<div class="stat-label">Lowest ELO</div>
-				<div class="stat-value">{getLowestElo().toFixed(1)}</div>
 			</div>
 		</div>
 
@@ -490,7 +483,7 @@
 
 <style>
 	.container {
-		max-width: 1400px;
+		max-width: 1200px;
 		margin: 0 auto;
 		padding: 6rem 2rem 4rem 2rem;
 	}
@@ -612,7 +605,7 @@
 
 	.stats-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		grid-template-columns: repeat(3, 1fr);
 		gap: 1rem;
 		margin-bottom: 3rem;
 	}
