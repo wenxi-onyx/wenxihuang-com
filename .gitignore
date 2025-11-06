@@ -1,5 +1,6 @@
 # Plans directory (v2 feature)
-/plans/
+# Ignore all subdirectories in plans/ except mult-chatgpt/
+/plans/*
 !/plans/mult-chatgpt/
 
 # IDE
