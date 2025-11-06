@@ -3,13 +3,13 @@
 
 	type AddMatchModalState = {
 		isOpen: boolean;
-		onSuccess?: () => void;
+		onSuccess?: () => void | Promise<void>;
 		userName?: string;
 	};
 
 	const modalStore = writable<AddMatchModalState>({ isOpen: false });
 
-	export function openAddMatchModal(onSuccess?: () => void, userName?: string) {
+	export function openAddMatchModal(onSuccess?: () => void | Promise<void>, userName?: string) {
 		modalStore.set({ isOpen: true, onSuccess, userName });
 	}
 
@@ -229,15 +229,13 @@
 				submitted_at: submittedAtISO
 			});
 
-			showToast('Match recorded successfully!', 'success');
+			// Close modal first
+			closeAddMatchModal();
 
-			// Call onSuccess callback if provided
+			// Then call onSuccess callback (which will show toast on parent page)
 			if (modalState.onSuccess) {
 				modalState.onSuccess();
 			}
-
-			// Close modal (form will be reset when reopened)
-			closeAddMatchModal();
 		} catch (e) {
 			showToast(e instanceof Error ? e.message : 'Failed to record match', 'error');
 		} finally {
@@ -270,15 +268,19 @@
 </script>
 
 {#if modalState.isOpen}
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div
 		class="modal-backdrop"
 		onclick={handleClose}
-		aria-label="Close modal"
+		role="presentation"
 	>
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<div
 			class="modal"
 			onclick={(e) => e.stopPropagation()}
 			role="dialog"
+			tabindex="-1"
 			aria-modal="true"
 			aria-labelledby="modal-title"
 		>

@@ -5,6 +5,7 @@
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import LoginButton from '$lib/components/LoginButton.svelte';
 	import AddMatchModal, { openAddMatchModal } from '$lib/components/AddMatchModal.svelte';
+	import Toast, { showToast } from '$lib/components/Toast.svelte';
 
 	const user = $derived($authStore.user);
 
@@ -175,10 +176,17 @@
 	}
 
 	function handleAddMatch() {
+		// Construct full name from first_name and last_name
+		const userName = user
+			? [user.first_name, user.last_name].filter(Boolean).join(' ')
+			: undefined;
+
 		openAddMatchModal(() => {
+			// Show success toast
+			showToast('Match recorded successfully!', 'success');
 			// Reload players after match is added
 			loadPlayers();
-		}, user?.name);
+		}, userName);
 	}
 </script>
 
@@ -189,6 +197,7 @@
 <ThemeToggle />
 <LoginButton />
 <AddMatchModal />
+<Toast />
 
 <div class="container">
 	<header class="page-header">

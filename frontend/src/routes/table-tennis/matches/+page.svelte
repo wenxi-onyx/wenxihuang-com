@@ -119,10 +119,17 @@
 	}
 
 	function handleAddMatch() {
+		// Construct full name from first_name and last_name
+		const userName = user
+			? [user.first_name, user.last_name].filter(Boolean).join(' ')
+			: undefined;
+
 		openAddMatchModal(() => {
+			// Show success toast
+			showToast('Match recorded successfully!', 'success');
 			// Reload matches after match is added
 			loadMatches(currentPage);
-		}, user?.name);
+		}, userName);
 	}
 </script>
 
