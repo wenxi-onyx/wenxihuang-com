@@ -1715,7 +1715,7 @@ Update `frontend/src/routes/+layout.svelte` to add "Plans" link to navigation:
 
 ## 4. Implementation Phases
 
-### Phase 1: Database & Backend Foundation (Week 1)
+### Phase 1: Database & Backend Foundation
 1. Create migration file `006_create_multiplayer_chatgpt_system.sql`
 2. Implement models in `models/plan.rs`
 3. Create `services/anthropic.rs` (with mock responses initially)
@@ -1723,34 +1723,34 @@ Update `frontend/src/routes/+layout.svelte` to add "Plans" link to navigation:
 5. Register routes in `main.rs`
 6. Test with curl/Postman
 
-### Phase 2: Frontend Basics (Week 2)
+### Phase 2: Frontend Basics
 1. Create API client (`lib/api/plans.ts`)
 2. Implement plans list page (`/plans`)
 3. Implement upload page (`/plans/upload`)
 4. Basic plan viewer (`/plans/[id]`) with raw/rendered toggle
 5. Test upload and viewing flow
 
-### Phase 3: Comments & Highlighting (Week 3)
+### Phase 3: Comments & Highlighting
 1. Implement text selection and offset calculation
 2. Create comment submission UI
 3. Build `CommentThread` component
 4. Test comment creation and display
 5. Implement comment status visualization (pending/accepted/rejected)
 
-### Phase 4: Discussions (Week 4)
+### Phase 4: Discussions
 1. Implement discussion thread UI
 2. Add real-time comment status updates
 3. Build owner-only accept/reject controls
 4. Test full discussion flow
 
-### Phase 5: AI Integration (Week 5)
+### Phase 5: AI Integration
 1. Integrate real Anthropic API
 2. Implement `accept_comment_and_integrate` service
 3. Implement `accept_discussion_and_integrate` service
 4. Create plan versioning system
 5. Test AI plan updates end-to-end
 
-### Phase 6: Polish & Testing (Week 6)
+### Phase 6: Polish & Testing
 1. Add loading states and error handling
 2. Improve markdown rendering (use `marked` library)
 3. Add comment anchoring resilience (handle plan changes)
@@ -1987,8 +1987,6 @@ This plan provides a complete roadmap for implementing "Multiplayer ChatGPT" col
 - Clear separation of concerns (models, services, handlers)
 - Incremental implementation (6 phases)
 - Extensible for future features (real-time, auto-sync)
-
-**Estimated Timeline:** 6-8 weeks for MVP (Phases 1-6)
 
 **Next Steps:**
 1. Review and approve this plan
