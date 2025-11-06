@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            m.id,\n            m.player1_id,\n            m.player2_id,\n            m.season_id,\n            m.submitted_at,\n            p1.first_name as player1_first_name,\n            p1.last_name as player1_last_name,\n            p2.first_name as player2_first_name,\n            p2.last_name as player2_last_name,\n            s.name as season_name\n        FROM matches m\n        INNER JOIN players p1 ON m.player1_id = p1.id\n        INNER JOIN players p2 ON m.player2_id = p2.id\n        INNER JOIN seasons s ON m.season_id = s.id\n        ORDER BY m.submitted_at DESC\n        LIMIT $1 OFFSET $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "player1_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "player2_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "season_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "submitted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "player1_first_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "player1_last_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "player2_first_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "player2_last_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "season_name",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "03261d77d70fa59eb2bd0bb0761811b62808fb4360d114a3f38ff4af6514485a"
+}

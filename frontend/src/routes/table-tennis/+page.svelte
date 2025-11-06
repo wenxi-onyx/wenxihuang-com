@@ -1,11 +1,35 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { authStore } from '$lib/stores/auth';
-	import { playersApi, seasonsApi, type PlayerWithStats, type Season, type PlayerSeasonStats } from '$lib/api/client';
+	import { playersApi, seasonsApi, type PlayerWithStats, type Season, type PlayerSeasonStats, type PlayerEloHistory } from '$lib/api/client';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import LoginButton from '$lib/components/LoginButton.svelte';
 	import AddMatchModal, { openAddMatchModal } from '$lib/components/AddMatchModal.svelte';
 	import Toast, { showToast } from '$lib/components/Toast.svelte';
+	import {
+		Chart,
+		LineController,
+		LineElement,
+		PointElement,
+		LinearScale,
+		Title,
+		Tooltip,
+		Legend,
+		CategoryScale
+	} from 'chart.js';
+	import 'chartjs-adapter-date-fns';
+
+	// Register Chart.js components
+	Chart.register(
+		LineController,
+		LineElement,
+		PointElement,
+		LinearScale,
+		Title,
+		Tooltip,
+		Legend,
+		CategoryScale
+	);
 
 	const user = $derived($authStore.user);
 
@@ -21,6 +45,12 @@
 	let sortDirection = $state<'asc' | 'desc'>('desc');
 	let abortController: AbortController | null = null; // For canceling in-flight requests
 	let showManageDropdown = $state(false);
+
+	// Chart related state
+	let allPlayersHistory = $state<PlayerEloHistory[]>([]);
+	let chartCanvas = $state<HTMLCanvasElement | undefined>();
+	let chart: any | null = null;
+	let loadingChart = $state(false);
 
 	async function loadSeasons() {
 		try {
@@ -103,11 +133,18 @@
 	onMount(async () => {
 		await loadSeasons();
 		await loadPlayers();
+		await loadAllPlayersHistory();
 		// After initial load, track the season to detect future changes
 		if (selectedSeason) {
 			previousSeasonId = selectedSeason.id;
 		}
 		initialized = true;
+	});
+
+	onDestroy(() => {
+		if (chart) {
+			chart.destroy();
+		}
 	});
 
 	// Reload players when season changes (but not on initial load)
@@ -160,6 +197,304 @@
 
 		filteredPlayers = filtered;
 	});
+
+	async function loadAllPlayersHistory() {
+		const CACHE_KEY = 'tt-players-history-matches-cache';
+		const CACHE_TIMESTAMP_KEY = 'tt-players-history-matches-timestamp';
+		const CACHE_DURATION = 60 * 1000; // 60 seconds
+
+		try {
+			// Try to load from cache first (synchronously)
+			const cachedData = localStorage.getItem(CACHE_KEY);
+			const cachedTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+
+			let usedCache = false;
+			if (cachedData && cachedTimestamp) {
+				const age = Date.now() - parseInt(cachedTimestamp);
+				// Use cache if it's less than 5 minutes old (stale-while-revalidate)
+				if (age < 300000) {
+					allPlayersHistory = JSON.parse(cachedData);
+					usedCache = true;
+
+					// If cache is very fresh (< 60s), we can skip the loading state
+					if (age < CACHE_DURATION) {
+						// Don't need to fetch, data is fresh
+						return;
+					}
+				}
+			}
+
+			// Fetch fresh data (only show spinner if we didn't have cache)
+			if (!usedCache) {
+				loadingChart = true;
+			}
+
+			const freshData = await playersApi.getAllPlayersHistory();
+
+			// Update state with fresh data
+			allPlayersHistory = freshData;
+
+			// Save to cache
+			localStorage.setItem(CACHE_KEY, JSON.stringify(freshData));
+			localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+
+			loadingChart = false;
+		} catch (e) {
+			console.error('Failed to load players history:', e);
+			loadingChart = false;
+		}
+	}
+
+	// Create chart reactively when data and canvas are ready
+	$effect(() => {
+		if (chartCanvas && allPlayersHistory.length > 0 && !loadingChart) {
+			// Use requestAnimationFrame to ensure canvas is fully rendered
+			requestAnimationFrame(() => {
+				createChart();
+			});
+		}
+	});
+
+	function createChart() {
+		if (!chartCanvas || !allPlayersHistory.length) return;
+
+		// Filter out players with no history and check if we have any data to display
+		const playersWithHistory = allPlayersHistory.filter(p => p.history.length > 0);
+		if (playersWithHistory.length === 0) return;
+
+		// Destroy existing chart if any
+		if (chart) {
+			chart.destroy();
+		}
+
+		const ctx = chartCanvas.getContext('2d');
+		if (!ctx) return;
+
+		// Get current theme
+		const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+		const textColor = isDark ? '#ffffff' : '#000000';
+		const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)';
+		const borderColor = isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)';
+
+		// Define colors for players (more vibrant palette)
+		const playerColors = [
+			'rgba(59, 130, 246, 0.9)',   // blue
+			'rgba(168, 85, 247, 0.9)',   // purple
+			'rgba(34, 197, 94, 0.9)',    // green
+			'rgba(234, 179, 8, 0.9)',    // yellow
+			'rgba(239, 68, 68, 0.9)',    // red
+			'rgba(236, 72, 153, 0.9)',   // pink
+			'rgba(14, 165, 233, 0.9)',   // cyan
+			'rgba(249, 115, 22, 0.9)',   // orange
+			'rgba(139, 92, 246, 0.9)',   // violet
+			'rgba(16, 185, 129, 0.9)',   // emerald
+			'rgba(245, 158, 11, 0.9)',   // amber
+			'rgba(99, 102, 241, 0.9)',   // indigo
+		];
+
+		// Find the player with the most data points (calculate once)
+		let maxDataPoints = Math.max(...playersWithHistory.map(p => p.history.length + 1));
+
+		// Create datasets for each player
+		const datasets: any[] = [];
+		let colorIndex = 0;
+
+		playersWithHistory.forEach(playerData => {
+			const playerColor = playerColors[colorIndex % playerColors.length];
+			colorIndex++;
+
+			const dataPoints = [];
+			const playerTotalPoints = playerData.history.length + 1; // +1 for starting point
+
+			// Add starting point (elo_before of first match)
+			dataPoints.push({
+				x: 0,
+				y: playerData.history[0].elo_before
+			});
+
+			// Add all matches for this player, spacing them evenly across the chart width
+			playerData.history.forEach((point, index) => {
+				// Map this player's match index to the full chart width
+				// Handle edge case where player has only 1 match (avoid division by zero)
+				const normalizedX = playerTotalPoints > 1
+					? ((index + 1) / (playerTotalPoints - 1)) * (maxDataPoints - 1)
+					: maxDataPoints - 1;
+
+				dataPoints.push({
+					x: normalizedX,
+					y: point.elo_after
+				});
+			});
+
+			datasets.push({
+				label: playerData.player_name,
+				data: dataPoints,
+				borderColor: playerColor,
+				backgroundColor: 'transparent',
+				borderWidth: 2,
+				pointRadius: 1,
+				pointHoverRadius: 4,
+			pointHitRadius: 8,
+				pointBackgroundColor: playerColor,
+				pointBorderColor: playerColor,
+				pointHoverBackgroundColor: textColor,
+				pointHoverBorderColor: playerColor,
+				pointBorderWidth: 1,
+				pointHoverBorderWidth: 2,
+				fill: false,
+				tension: 0.2,
+				spanGaps: false
+			});
+		});
+
+		chart = new Chart(ctx, {
+			type: 'line',
+			data: { datasets },
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				plugins: {
+					title: {
+						display: true,
+						text: 'ALL PLAYERS ELO HISTORY',
+						color: textColor,
+						font: {
+							size: 11,
+							weight: isDark ? 500 : 300,
+							family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+						},
+						padding: {
+							top: 0,
+							bottom: 20
+						}
+					},
+					legend: {
+						display: true,
+						position: 'bottom',
+						labels: {
+							color: textColor,
+							font: {
+								size: 9,
+								weight: isDark ? 400 : 300,
+								family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+							},
+							padding: 8,
+							usePointStyle: true,
+							pointStyle: 'rectRounded',
+							boxWidth: 25,
+							boxHeight: 4
+						}
+					},
+					tooltip: {
+						enabled: true,
+						backgroundColor: isDark ? 'rgba(0, 0, 0, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+						titleColor: textColor,
+						bodyColor: textColor,
+						borderColor: borderColor,
+						borderWidth: 1,
+						padding: 12,
+						displayColors: true,
+						titleFont: {
+							size: 10,
+							weight: 400,
+							family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+						},
+						bodyFont: {
+							size: 11,
+							weight: isDark ? 500 : 300,
+							family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+						},
+					filter: (tooltipItem, index, tooltipItems) => {
+						// Only show the first point for each dataset (player)
+						const datasetIndex = tooltipItem.datasetIndex;
+						const firstIndexForDataset = tooltipItems.findIndex(item => item.datasetIndex === datasetIndex);
+						return index === firstIndexForDataset;
+					},
+						callbacks: {
+							label: (context) => {
+								const yValue = context.parsed?.y;
+								const playerName = context.dataset.label || '';
+								return yValue !== null && yValue !== undefined ? `${playerName}: ${yValue.toFixed(1)}` : '';
+							}
+						}
+					}
+				},
+				scales: {
+					x: {
+						type: 'linear',
+						grid: {
+							color: gridColor,
+							lineWidth: 1
+						},
+						border: {
+							display: false
+						},
+						title: {
+							display: true,
+							text: 'RELATIVE PROGRESS',
+							color: textColor,
+							font: {
+								size: 9,
+								weight: isDark ? 400 : 300,
+								family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+							},
+							padding: {
+								top: 12
+							}
+						},
+						ticks: {
+							color: textColor,
+							font: {
+								size: 10,
+								weight: 300,
+								family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+							},
+							padding: 8,
+							callback: function(value) {
+								// Show fewer ticks for cleaner display
+								return '';
+							}
+						}
+					},
+					y: {
+						grid: {
+							color: gridColor,
+							lineWidth: 1
+						},
+						border: {
+							display: false
+						},
+						title: {
+							display: true,
+							text: 'ELO RATING',
+							color: textColor,
+							font: {
+								size: 9,
+								weight: isDark ? 400 : 300,
+								family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+							},
+							padding: {
+								bottom: 12
+							}
+						},
+						ticks: {
+							color: textColor,
+							font: {
+								size: 10,
+								weight: 300,
+								family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+							},
+							padding: 8
+						}
+					}
+				},
+				interaction: {
+					mode: 'point',
+					intersect: false
+				}
+			}
+		});
+	}
 
 	function handleSort(field: typeof sortField) {
 		if (sortField === field) {
@@ -227,7 +562,7 @@
 					{/if}
 				</div>
 			{/if}
-			<a href="/">BACK</a>
+			<button class="nav-link-btn" onclick={() => window.history.back()}>BACK</button>
 		</nav>
 	</header>
 
@@ -260,11 +595,6 @@
 				bind:value={searchQuery}
 				class="search-input"
 			/>
-			<div class="stats-summary">
-				<span class="stat">
-					<strong>{filteredPlayers.length}</strong> {filteredPlayers.length === 1 ? 'player' : 'players'}
-				</span>
-			</div>
 		</div>
 
 		<div class="table-wrapper">
@@ -332,12 +662,26 @@
 				</tbody>
 			</table>
 		</div>
+
+		<!-- All Players ELO History Chart -->
+		{#if allPlayersHistory.some(p => p.history.length > 0) || loadingChart}
+			<div class="chart-section">
+				<div class="chart-container">
+					{#if loadingChart}
+						<div class="chart-loading">
+							<div class="spinner"></div>
+						</div>
+					{/if}
+					<canvas bind:this={chartCanvas}></canvas>
+				</div>
+			</div>
+		{/if}
 	{/if}
 </div>
 
 <style>
 	.container {
-		max-width: 1400px;
+		max-width: 1200px;
 		margin: 0 auto;
 		padding: 6rem 2rem 4rem 2rem;
 	}
@@ -525,8 +869,7 @@
 	}
 
 	.search-input {
-		flex: 1;
-		min-width: 250px;
+		width: 400px;
 		padding: 0.75rem 1rem;
 		font-size: 1rem;
 		font-family: inherit;
@@ -535,6 +878,7 @@
 		border: 1px solid var(--border-subtle);
 		outline: none;
 		transition: border-color 0.2s ease;
+		margin-left: auto;
 	}
 
 	.search-input:focus {
@@ -547,7 +891,7 @@
 	}
 
 	.season-selector {
-		min-width: 200px;
+		width: 400px;
 		padding: 0.75rem 1rem;
 		font-size: 0.875rem;
 		font-family: inherit;
@@ -735,7 +1079,7 @@
 
 	.btn-view {
 		display: inline-block;
-		padding: 0.5rem 1rem;
+		padding: 0.5rem 0;
 		font-size: 0.75rem;
 		font-weight: 300;
 		text-transform: uppercase;
@@ -761,6 +1105,61 @@
 		padding: 3rem !important;
 		color: var(--text-primary);
 		opacity: 0.6;
+	}
+
+	/* Chart section */
+	.chart-section {
+		margin-top: 4rem;
+		padding-top: 3rem;
+		border-top: 1px solid var(--border-subtle);
+	}
+
+	.chart-container {
+		width: 100%;
+		height: 500px;
+		background: transparent;
+		border: 1px solid var(--border-subtle);
+		padding: 2rem;
+		position: relative;
+	}
+
+	.chart-loading {
+		position: absolute;
+		top: 2rem;
+		right: 2rem;
+		z-index: 10;
+	}
+
+	.spinner {
+		width: 24px;
+		height: 24px;
+		border: 2px solid var(--border-subtle);
+		border-top-color: var(--text-primary);
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	@media (max-width: 768px) {
+		.chart-container {
+			height: 400px;
+			padding: 1rem;
+		}
+
+		.chart-loading {
+			top: 1rem;
+			right: 1rem;
+		}
+
+		.spinner {
+			width: 20px;
+			height: 20px;
+		}
 	}
 
 	@media (max-width: 768px) {

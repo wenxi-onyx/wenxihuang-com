@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            m.id as match_id,\n            m.player1_id,\n            m.player2_id,\n            p1.first_name as p1_first,\n            p1.last_name as p1_last,\n            p2.first_name as p2_first,\n            p2.last_name as p2_last,\n            COUNT(CASE WHEN g.player1_id = $1 THEN 1 END) as player_games_won,\n            COUNT(CASE WHEN g.player1_id != $1 THEN 1 END) as opponent_games_won,\n            s.name as season_name,\n            m.submitted_at\n        FROM matches m\n        INNER JOIN players p1 ON m.player1_id = p1.id\n        INNER JOIN players p2 ON m.player2_id = p2.id\n        INNER JOIN seasons s ON m.season_id = s.id\n        INNER JOIN games g ON g.match_id = m.id\n        WHERE m.player1_id = $1 OR m.player2_id = $1\n        GROUP BY m.id, m.player1_id, m.player2_id, p1.first_name, p1.last_name, p2.first_name, p2.last_name, s.name, m.submitted_at\n        ORDER BY m.submitted_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "match_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "player1_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "player2_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "p1_first",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "p1_last",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "p2_first",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "p2_last",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "player_games_won",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "opponent_games_won",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "season_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "submitted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "b6083da97398f91ef84124d65a2d2aa80163d86b71c92e87e8505dc6d78e06f0"
+}

@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, name, starting_elo, k_factor, base_k_factor, new_player_k_bonus, new_player_bonus_period, elo_version\n        FROM seasons\n        WHERE is_active = true\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "starting_elo",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 3,
+        "name": "k_factor",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 4,
+        "name": "base_k_factor",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 5,
+        "name": "new_player_k_bonus",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 6,
+        "name": "new_player_bonus_period",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "elo_version",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "53f585929d254984f36e721a854fbad4a5f6e99fe53958dd495e08dfc88a8e3d"
+}

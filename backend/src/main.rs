@@ -238,8 +238,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let public_routes = Router::new()
         .route("/players", get(handlers::players::list_players))
         .route(
+            "/players/history/all",
+            get(handlers::players::get_all_players_history),
+        )
+        .route(
             "/players/{player_id}/history",
             get(handlers::players::get_player_history),
+        )
+        .route(
+            "/players/{player_id}/matches",
+            get(handlers::players::get_player_matches),
         )
         // Season routes
         .route("/seasons", get(handlers::seasons::list_seasons))

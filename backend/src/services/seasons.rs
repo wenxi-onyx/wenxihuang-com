@@ -88,6 +88,56 @@ pub async fn create_season(
     created_by: Uuid,
     player_ids: Option<Vec<Uuid>>,
 ) -> Result<Season, Box<dyn std::error::Error + Send + Sync>> {
+    // Validate inputs before starting transaction
+    let trimmed_name = name.trim();
+    if trimmed_name.is_empty() {
+        return Err("Season name cannot be empty".into());
+    }
+    if trimmed_name.len() > 255 {
+        return Err("Season name cannot exceed 255 characters".into());
+    }
+
+    if starting_elo < 0.0 {
+        return Err("Starting ELO cannot be negative".into());
+    }
+    if starting_elo > 5000.0 {
+        return Err("Starting ELO cannot exceed 5000".into());
+    }
+
+    if k_factor <= 0.0 {
+        return Err("K-factor must be positive".into());
+    }
+    if k_factor > 100.0 {
+        return Err("K-factor cannot exceed 100 (unreasonably high)".into());
+    }
+
+    if let Some(base_k) = base_k_factor {
+        if base_k <= 0.0 {
+            return Err("Base K-factor must be positive".into());
+        }
+        if base_k > 100.0 {
+            return Err("Base K-factor cannot exceed 100".into());
+        }
+    }
+
+    if let Some(bonus) = new_player_k_bonus {
+        if bonus < 0.0 {
+            return Err("New player K-bonus cannot be negative".into());
+        }
+        if bonus > 100.0 {
+            return Err("New player K-bonus cannot exceed 100".into());
+        }
+    }
+
+    if let Some(period) = new_player_bonus_period {
+        if period < 0 {
+            return Err("New player bonus period cannot be negative".into());
+        }
+        if period > 1000 {
+            return Err("New player bonus period cannot exceed 1000 games".into());
+        }
+    }
+
     let mut tx = pool.begin().await?;
 
     // Deactivate all existing seasons
@@ -103,7 +153,7 @@ pub async fn create_season(
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
          RETURNING *",
     )
-    .bind(name)
+    .bind(trimmed_name)
     .bind(description)
     .bind(start_date)
     .bind(starting_elo)
@@ -1014,44 +1064,85 @@ pub async fn delete_season(
 
     tracing::info!("Deleting season: {}", season.name);
 
-    // Start transaction
-    let mut tx = pool.begin().await?;
-
-    // Delete player_seasons entries
-    sqlx::query("DELETE FROM player_seasons WHERE season_id = $1")
-        .bind(season_id)
-        .execute(&mut *tx)
-        .await?;
-
-    // Delete elo_history entries
-    sqlx::query("DELETE FROM elo_history WHERE season_id = $1")
-        .bind(season_id)
-        .execute(&mut *tx)
-        .await?;
-
-    // Delete the season itself
-    sqlx::query("DELETE FROM seasons WHERE id = $1")
-        .bind(season_id)
-        .execute(&mut *tx)
-        .await?;
-
-    tx.commit().await?;
-
-    tracing::info!("Deleted season: {}", season.name);
-
-    // Reassign all games to their correct seasons
-    reassign_games_to_seasons(pool).await?;
-
-    // Find the earliest affected season (the one before the deleted season)
-    // Games from the deleted season get reassigned to it, so it needs recalculation
-    let earliest_affected = sqlx::query_as::<_, Season>(
+    // Find the target season for reassignment BEFORE starting transaction
+    let target_season = sqlx::query_as::<_, Season>(
         "SELECT * FROM seasons WHERE start_date < $1 ORDER BY start_date DESC LIMIT 1",
     )
     .bind(season.start_date)
     .fetch_optional(pool)
     .await?;
 
-    let recalc_from = earliest_affected
+    // Start transaction - all modifications must be within this transaction
+    let mut tx = pool.begin().await?;
+
+    // Step 1: Reassign matches and games to the previous season (if exists)
+    // This MUST happen before deleting the season to prevent orphaned records
+    if let Some(target) = &target_season {
+        tracing::info!(
+            "Reassigning matches from season '{}' to '{}'",
+            season.name,
+            target.name
+        );
+
+        // Reassign matches
+        let matches_updated = sqlx::query("UPDATE matches SET season_id = $1 WHERE season_id = $2")
+            .bind(target.id)
+            .bind(season_id)
+            .execute(&mut *tx)
+            .await?;
+
+        tracing::info!("Reassigned {} matches", matches_updated.rows_affected());
+
+        // Reassign games
+        let games_updated = sqlx::query("UPDATE games SET season_id = $1 WHERE season_id = $2")
+            .bind(target.id)
+            .bind(season_id)
+            .execute(&mut *tx)
+            .await?;
+
+        tracing::info!("Reassigned {} games", games_updated.rows_affected());
+    } else {
+        // No previous season exists - check if there are any matches
+        let match_count: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM matches WHERE season_id = $1")
+                .bind(season_id)
+                .fetch_one(&mut *tx)
+                .await?;
+
+        if match_count.0 > 0 {
+            return Err(format!(
+                "Cannot delete season '{}': no previous season exists to reassign {} matches to",
+                season.name, match_count.0
+            )
+            .into());
+        }
+    }
+
+    // Step 2: Delete elo_history entries (will be recalculated after)
+    sqlx::query("DELETE FROM elo_history WHERE season_id = $1")
+        .bind(season_id)
+        .execute(&mut *tx)
+        .await?;
+
+    // Step 3: Delete player_seasons entries
+    sqlx::query("DELETE FROM player_seasons WHERE season_id = $1")
+        .bind(season_id)
+        .execute(&mut *tx)
+        .await?;
+
+    // Step 4: Delete the season itself (now safe since matches are reassigned)
+    sqlx::query("DELETE FROM seasons WHERE id = $1")
+        .bind(season_id)
+        .execute(&mut *tx)
+        .await?;
+
+    // Commit all changes atomically
+    tx.commit().await?;
+
+    tracing::info!("Successfully deleted season: {}", season.name);
+
+    // Step 5: Recalculate ELO for affected seasons (outside transaction is safe)
+    let recalc_from = target_season
         .map(|s| s.start_date)
         .unwrap_or(season.start_date);
 

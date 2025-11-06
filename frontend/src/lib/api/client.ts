@@ -179,13 +179,30 @@ export interface PlayerWithStats extends Player {
 }
 
 export interface EloHistoryPoint {
-    game_id: string;
+    match_id: string;
     elo_before: number;
     elo_after: number;
     elo_version: string;
     season_id: string;
     season_name: string;
     created_at: string;
+}
+
+export interface PlayerEloHistory {
+    player_id: string;
+    player_name: string;
+    history: EloHistoryPoint[];
+}
+
+export interface PlayerMatch {
+    match_id: string;
+    opponent_id: string;
+    opponent_name: string;
+    player_games_won: number;
+    opponent_games_won: number;
+    result: 'W' | 'L';
+    season_name: string;
+    submitted_at: string;
 }
 
 export interface Season {
@@ -403,6 +420,18 @@ export const playersApi = {
 
     async getPlayerHistory(playerId: string): Promise<EloHistoryPoint[]> {
         return apiCall<EloHistoryPoint[]>(`/api/players/${playerId}/history`, {
+            method: 'GET',
+        });
+    },
+
+    async getPlayerMatches(playerId: string): Promise<PlayerMatch[]> {
+        return apiCall<PlayerMatch[]>(`/api/players/${playerId}/matches`, {
+            method: 'GET',
+        });
+    },
+
+    async getAllPlayersHistory(): Promise<PlayerEloHistory[]> {
+        return apiCall<PlayerEloHistory[]>('/api/players/history/all', {
             method: 'GET',
         });
     },

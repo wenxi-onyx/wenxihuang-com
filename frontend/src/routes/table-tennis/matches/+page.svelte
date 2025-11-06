@@ -152,7 +152,7 @@
 					<span class="plus-icon">+</span> ADD MATCH
 				</button>
 			{/if}
-			<a href="/table-tennis">BACK</a>
+			<button class="nav-link-btn" onclick={() => window.history.back()}>BACK</button>
 		</nav>
 	</header>
 

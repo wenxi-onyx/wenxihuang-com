@@ -120,7 +120,7 @@
 		<nav class="nav-links">
 			<a href="/table-tennis/seasons">SEASONS</a>
 			<a href="/table-tennis/admin">ELO ALGORITHMS</a>
-			<a href="/table-tennis">BACK</a>
+			<button class="nav-link-btn" onclick={() => window.history.back()}>BACK</button>
 		</nav>
 	</header>
 
@@ -277,6 +277,29 @@
 	}
 
 	.nav-links a:hover {
+		opacity: 1;
+	}
+
+	.nav-link-btn {
+		font-size: 0.875rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		text-decoration: none;
+		color: inherit;
+		opacity: 0.7;
+		transition: opacity 0.2s ease;
+		line-height: 1;
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0;
+		margin: 0;
+		font-family: inherit;
+		appearance: none;
+	}
+
+	.nav-link-btn:hover {
 		opacity: 1;
 	}
 
@@ -444,8 +467,9 @@
 
 	.actions-cell {
 		display: flex;
+		flex-direction: column;
 		gap: 0.5rem;
-		flex-wrap: wrap;
+		align-items: flex-start;
 	}
 
 	.btn-action {
@@ -469,7 +493,7 @@
 
 	.btn-view {
 		display: inline-block;
-		padding: 0.5rem 0.875rem;
+		padding: 0.5rem 0;
 		font-size: 0.625rem;
 		font-weight: 300;
 		letter-spacing: 0.1em;

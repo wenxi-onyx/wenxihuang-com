@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT p.id, p.first_name, p.last_name, ps.current_elo, p.is_active\n        FROM players p\n        INNER JOIN player_seasons ps ON p.id = ps.player_id\n        WHERE ps.season_id = $1\n          AND ps.is_included = true\n          AND p.is_active = true\n        ORDER BY p.first_name, p.last_name\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "first_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "current_elo",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_active",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "91cf42a8ad8ae49880abe89afc0eb76679504b79f587b29aeea17ae781a38a14"
+}

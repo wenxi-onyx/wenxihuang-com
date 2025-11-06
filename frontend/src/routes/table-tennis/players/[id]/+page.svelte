@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
-	import { playersApi, type PlayerWithStats, type EloHistoryPoint } from '$lib/api/client';
+	import { playersApi, type PlayerWithStats, type EloHistoryPoint, type PlayerMatch } from '$lib/api/client';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import LoginButton from '$lib/components/LoginButton.svelte';
 	import {
@@ -33,6 +33,7 @@
 
 	let player: PlayerWithStats | null = null;
 	let history: EloHistoryPoint[] = [];
+	let matches: PlayerMatch[] = [];
 	let loading = true;
 	let error = '';
 	let chartCanvas: HTMLCanvasElement;
@@ -48,14 +49,16 @@
 		}
 
 		try {
-			// Fetch player data and history
-			const [allPlayers, playerHistory] = await Promise.all([
+			// Fetch player data, history, and matches
+			const [allPlayers, playerHistory, playerMatches] = await Promise.all([
 				playersApi.listPlayers(),
-				playersApi.getPlayerHistory(playerId)
+				playersApi.getPlayerHistory(playerId),
+				playersApi.getPlayerMatches(playerId)
 			]);
 
 			player = allPlayers.find(p => p.id === playerId) || null;
 			history = playerHistory;
+			matches = playerMatches;
 
 			if (!player) {
 				error = 'Player not found';
@@ -155,6 +158,7 @@
 				borderWidth: 2,
 				pointRadius: 2,
 				pointHoverRadius: 5,
+				pointHitRadius: 10,
 				pointBackgroundColor: seasonColor.border,
 				pointBorderColor: seasonColor.border,
 				pointHoverBackgroundColor: textColor,
@@ -200,7 +204,9 @@
 							},
 							padding: 12,
 							usePointStyle: true,
-							pointStyle: 'line'
+							pointStyle: 'rectRounded',
+							boxWidth: 25,
+							boxHeight: 4
 						}
 					},
 					tooltip: {
@@ -314,8 +320,8 @@
 				},
 				interaction: {
 					mode: 'nearest',
-					axis: 'x',
-					intersect: false
+					intersect: false,
+					axis: 'x'
 				}
 			}
 		});
@@ -343,6 +349,33 @@
 		if (history.length === 0) return player?.current_elo || 0;
 		return Math.min(...history.map(h => h.elo_after), history[0].elo_before);
 	}
+
+	function formatMatchDate(dateString: string): string {
+		const date = new Date(dateString);
+		const dateStr = date.toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		}).toUpperCase();
+		const timeStr = date.toLocaleTimeString('en-US', {
+			hour: 'numeric',
+			minute: '2-digit',
+			hour12: true,
+			timeZoneName: 'short'
+		}).toUpperCase();
+		return `${dateStr} ${timeStr}`;
+	}
+
+	function getMatchEloChange(matchId: string): number {
+		const matchHistory = history.find(h => h.match_id === matchId);
+		if (!matchHistory) return 0;
+		return matchHistory.elo_after - matchHistory.elo_before;
+	}
+
+	function formatEloChange(change: number): string {
+		if (change > 0) return `+${change.toFixed(1)}`;
+		return change.toFixed(1);
+	}
 </script>
 
 <svelte:head>
@@ -367,7 +400,7 @@
 				{/if}
 			</div>
 			<nav class="nav-links">
-				<a href="/table-tennis">BACK TO LEADERBOARD</a>
+				<button class="nav-link-btn" onclick={() => window.history.back()}>BACK</button>
 			</nav>
 		</header>
 
@@ -416,7 +449,9 @@
 			<div class="chart-container">
 				<canvas bind:this={chartCanvas}></canvas>
 			</div>
+		{/if}
 
+		{#if matches.length > 0}
 			<div class="history-section">
 				<h2 class="section-title">Recent Match History</h2>
 				<div class="table-wrapper">
@@ -424,22 +459,23 @@
 						<thead>
 							<tr>
 								<th>Date</th>
-								<th>ELO Before</th>
-								<th>ELO After</th>
-								<th>Change</th>
-								<th>Version</th>
+								<th>Opponent</th>
+								<th>Score</th>
+								<th>ELO Change</th>
+								<th>Season</th>
 							</tr>
 						</thead>
 						<tbody>
-							{#each history.slice(-20).reverse() as point}
+							{#each matches.slice(0, 20) as match}
+								{@const eloChange = getMatchEloChange(match.match_id)}
 								<tr>
-									<td>{new Date(point.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</td>
-									<td>{point.elo_before.toFixed(1)}</td>
-									<td>{point.elo_after.toFixed(1)}</td>
-									<td class:positive={point.elo_after > point.elo_before} class:negative={point.elo_after < point.elo_before}>
-										{point.elo_after > point.elo_before ? '+' : ''}{(point.elo_after - point.elo_before).toFixed(1)}
+									<td>{formatMatchDate(match.submitted_at)}</td>
+									<td>{match.opponent_name}</td>
+									<td>{match.player_games_won} - {match.opponent_games_won}</td>
+									<td class:positive={eloChange > 0} class:negative={eloChange < 0}>
+										{formatEloChange(eloChange)}
 									</td>
-									<td><span class="version-badge">{point.elo_version}</span></td>
+									<td><span class="version-badge">{match.season_name}</span></td>
 								</tr>
 							{/each}
 						</tbody>
@@ -511,6 +547,29 @@
 	}
 
 	.nav-links a:hover {
+		opacity: 1;
+	}
+
+	.nav-link-btn {
+		font-size: 0.875rem;
+		font-weight: 300;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		text-decoration: none;
+		color: inherit;
+		opacity: 0.7;
+		transition: opacity 0.2s ease;
+		line-height: 1;
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0;
+		margin: 0;
+		font-family: inherit;
+		appearance: none;
+	}
+
+	.nav-link-btn:hover {
 		opacity: 1;
 	}
 
@@ -607,11 +666,11 @@
 	}
 
 	.stat-value.positive {
-		color: rgba(34, 197, 94, 0.9);
+		color: rgba(34, 197, 94, 0.65);
 	}
 
 	:global([data-theme='light']) .stat-value.positive {
-		color: rgba(22, 163, 74, 0.9);
+		color: rgba(22, 163, 74, 0.7);
 	}
 
 	.stat-value.negative {
@@ -623,11 +682,11 @@
 	}
 
 	.wins {
-		color: rgba(34, 197, 94, 0.85);
+		color: rgba(34, 197, 94, 0.65);
 	}
 
 	:global([data-theme='light']) .wins {
-		color: rgba(22, 163, 74, 0.85);
+		color: rgba(22, 163, 74, 0.7);
 	}
 
 	.losses {
@@ -686,7 +745,7 @@
 
 	.history-table th {
 		padding: 1rem;
-		text-align: left;
+		text-align: center;
 		font-weight: 300;
 		color: var(--text-primary);
 		font-size: 0.75rem;
@@ -717,15 +776,16 @@
 		font-size: 0.875rem;
 		color: var(--text-primary);
 		font-weight: 300;
+		text-align: center;
 	}
 
 	.history-table td.positive {
 		font-weight: 300;
-		color: rgba(34, 197, 94, 0.9);
+		color: rgba(34, 197, 94, 0.65);
 	}
 
 	:global([data-theme='light']) .history-table td.positive {
-		color: rgba(22, 163, 74, 0.9);
+		color: rgba(22, 163, 74, 0.7);
 	}
 
 	.history-table td.negative {
