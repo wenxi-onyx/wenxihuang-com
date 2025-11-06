@@ -2,7 +2,8 @@
 /plans/
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/*.template
 .idea/
 *.swp
 *.swo

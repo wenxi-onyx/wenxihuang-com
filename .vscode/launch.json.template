@@ -1,0 +1,51 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node-terminal",
+      "request": "launch",
+      "name": "Run Frontend",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}/frontend",
+      "env": {
+        "VITE_API_URL": "http://localhost:8083"
+      }
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Run Backend",
+      "cargo": {
+        "args": [
+          "run",
+          "--bin=backend",
+          "--manifest-path=${workspaceFolder}/backend/Cargo.toml"
+        ],
+        "filter": {
+          "name": "backend",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "DATABASE_URL": "postgresql://postgres:postgres@localhost:5433/wenxihuang_dev",
+        "SESSION_SECRET": "GENERATE_YOUR_OWN_SECRET_KEY_HERE",
+        "PORT": "8083"
+      },
+      "preLaunchTask": "kill port 8083"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Run Full Stack",
+      "configurations": ["Run Backend", "Run Frontend"],
+      "stopAll": true,
+      "presentation": {
+        "hidden": false,
+        "group": "fullstack",
+        "order": 1
+      }
+    }
+  ]
+}
