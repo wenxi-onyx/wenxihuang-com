@@ -48,6 +48,28 @@ impl From<User> for UserInfo {
     }
 }
 
+/// Helper function to create a session cookie with consistent settings
+fn create_session_cookie(value: String, max_age: Duration) -> Cookie<'static> {
+    let mut cookie = Cookie::new("session_id", value);
+    cookie.set_http_only(true);
+    cookie.set_path("/");
+
+    // Use SameSite::Lax for Safari compatibility
+    // Since frontend and backend share the same root domain (wenxihuang.com),
+    // SameSite::Lax works and is more compatible with Safari than SameSite::None
+    if cfg!(debug_assertions) {
+        cookie.set_secure(false);
+        cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
+    } else {
+        cookie.set_secure(true);
+        cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
+        // Set domain to allow cookie sharing between wenxihuang.com and api.wenxihuang.com
+        cookie.set_domain("wenxihuang.com");
+    }
+    cookie.set_max_age(max_age);
+    cookie
+}
+
 /// Login handler
 pub async fn login(
     State(pool): State<PgPool>,
@@ -67,21 +89,8 @@ pub async fn login(
         .await
         .map_err(|_| AuthError::DatabaseError)?;
 
-    // Create secure cookie (30 days)
-    let mut cookie = Cookie::new("session_id", session_id);
-    cookie.set_http_only(true);
-    // In production, use secure cookies with SameSite::None for cross-origin requests
-    // In development, use less strict settings for localhost
-    if cfg!(debug_assertions) {
-        cookie.set_secure(false);
-        cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
-    } else {
-        cookie.set_secure(true);
-        cookie.set_same_site(tower_cookies::cookie::SameSite::None);
-    }
-    cookie.set_max_age(Duration::days(30));
-    cookie.set_path("/");
-
+    // Create and add secure cookie (30 days)
+    let cookie = create_session_cookie(session_id, Duration::days(30));
     cookies.add(cookie);
 
     Ok(Json(AuthResponse { user: user.into() }))
@@ -100,19 +109,8 @@ pub async fn logout(
         delete_session(&pool, session_id).await?;
     }
 
-    // Remove cookie (must match the settings used when creating it)
-    let mut cookie = Cookie::new("session_id", "");
-    cookie.set_http_only(true);
-    if cfg!(debug_assertions) {
-        cookie.set_secure(false);
-        cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
-    } else {
-        cookie.set_secure(true);
-        cookie.set_same_site(tower_cookies::cookie::SameSite::None);
-    }
-    cookie.set_max_age(Duration::ZERO);
-    cookie.set_path("/");
-
+    // Remove cookie by setting max age to zero
+    let cookie = create_session_cookie("".to_string(), Duration::ZERO);
     cookies.add(cookie);
 
     Ok(Json(serde_json::json!({

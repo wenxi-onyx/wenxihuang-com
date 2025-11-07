@@ -1,4 +1,4 @@
-import { writable, derived, get } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { authStore } from './auth';
 
@@ -13,6 +13,31 @@ export interface UserPresence {
 	page_path: string;
 	cursor?: CursorPosition;
 	color: string;
+}
+
+// Generate deterministic color from user_id (hash-based)
+function getUserColor(userId: string): string {
+	const colors = [
+		'#3B82F6', // blue
+		'#A855F7', // purple
+		'#22C55E', // green
+		'#EAB308', // yellow
+		'#EF4444', // red
+		'#EC4899', // pink
+		'#0EA5E9', // cyan
+		'#F97316', // orange
+		'#8B5CF6', // violet
+		'#10B981', // emerald
+		'#F59E0B', // amber
+		'#6366F1'  // indigo
+	];
+
+	// Simple hash function to get consistent color for same user
+	let hash = 0;
+	for (let i = 0; i < userId.length; i++) {
+		hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+	}
+	return colors[Math.abs(hash) % colors.length];
 }
 
 export interface PresenceMessage {
@@ -54,12 +79,10 @@ class PresenceStore {
 			this.reconnectTimeout = null;
 		}
 
-		// Use secure WebSocket if page is HTTPS
-		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const host = window.location.hostname;
-		// In dev, use port 8083 (backend port), in prod use current port
-		const port = import.meta.env.DEV ? ':8083' : (window.location.port ? `:${window.location.port}` : '');
-		const wsUrl = `${protocol}//${host}${port}/api/presence/ws`;
+		// Get API URL from environment (same pattern as REST API client)
+		const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8083';
+		// Convert HTTP(S) URL to WS(S)
+		const wsUrl = apiUrl.replace(/^http/, 'ws') + '/api/presence/ws';
 
 		try {
 			console.log('Attempting to connect to WebSocket:', wsUrl);
@@ -116,9 +139,14 @@ class PresenceStore {
 
 	private handleMessage(message: PresenceMessage) {
 		if (message.type === 'presence_update' && message.users) {
-			// Filter out current user from the list
+			// Filter out current user from the list and assign colors
 			const currentUser = get(authStore).user;
-			const otherUsers = message.users.filter((u) => u.user_id !== currentUser?.id);
+			const otherUsers = message.users
+				.filter((u) => u.user_id !== currentUser?.id)
+				.map((u) => ({
+					...u,
+					color: getUserColor(u.user_id) // Assign deterministic color
+				}));
 			console.log('👥 Updating users:', otherUsers.length, 'other users on this page');
 			this.users.set(otherUsers);
 		}

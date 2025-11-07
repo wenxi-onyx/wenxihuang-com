@@ -37,15 +37,19 @@
 	let players = $state<PlayerWithStats[]>([]);
 	let filteredPlayers = $state<PlayerWithStats[]>([]);
 	let seasons = $state<Season[]>([]);
-	let selectedSeason = $state<Season | null>(null);
+	let selectedSeasonId = $state<string | null>(null);
 	let loading = $state(true);
-	let loadingPlayers = $state(false); // Track player data loading separately
 	let error = $state('');
 	let searchQuery = $state('');
 	let sortField = $state<'rank' | 'name' | 'current_elo' | 'games_played' | 'wins' | 'losses' | 'win_rate'>('current_elo');
 	let sortDirection = $state<'asc' | 'desc'>('desc');
 	let abortController: AbortController | null = null; // For canceling in-flight requests
 	let showManageDropdown = $state(false);
+
+	// Derive selectedSeason from selectedSeasonId
+	let selectedSeason = $derived(
+		selectedSeasonId ? seasons.find(s => s.id === selectedSeasonId) || null : null
+	);
 
 	// Chart related state
 	let allPlayersHistory = $state<PlayerEloHistory[]>([]);
@@ -59,10 +63,9 @@
 			// Try to get active season first
 			const activeSeason = await seasonsApi.getActiveSeason();
 			if (activeSeason) {
-				// Find the matching season in the array by ID
-				selectedSeason = seasons.find(s => s.id === activeSeason.id) || seasons[0] || null;
-			} else {
-				selectedSeason = seasons[0] || null;
+				selectedSeasonId = activeSeason.id;
+			} else if (seasons.length > 0) {
+				selectedSeasonId = seasons[0].id;
 			}
 		} catch (e) {
 			console.error('Failed to load seasons:', e);
@@ -70,7 +73,7 @@
 		}
 	}
 
-	async function loadPlayers() {
+	async function loadPlayers(seasonId: string | null) {
 		// Cancel any in-flight request
 		if (abortController) {
 			abortController.abort();
@@ -79,12 +82,11 @@
 		const currentController = abortController;
 
 		try {
-			loadingPlayers = true;
 			error = '';
 
-			if (selectedSeason) {
+			if (seasonId) {
 				// Load season-specific leaderboard
-				const seasonPlayers = await seasonsApi.getSeasonLeaderboard(selectedSeason.id);
+				const seasonPlayers = await seasonsApi.getSeasonLeaderboard(seasonId);
 
 				// Check if this request was aborted
 				if (currentController.signal.aborted) {
@@ -114,9 +116,7 @@
 				players = allPlayers;
 			}
 
-			filteredPlayers = players;
 			loading = false;
-			loadingPlayers = false;
 		} catch (e) {
 			// Don't show error if request was aborted (user switched seasons)
 			if (currentController.signal.aborted) {
@@ -124,22 +124,16 @@
 			}
 			error = e instanceof Error ? e.message : 'Failed to load players';
 			loading = false;
-			loadingPlayers = false;
 		}
 	}
 
-	let previousSeasonId: string | null = null; // Non-reactive tracker
-	let initialized = false; // Track if initial load is complete
+	let previousSeasonId: string | null | undefined = undefined; // Track previous season for change detection
 
 	onMount(async () => {
 		await loadSeasons();
-		await loadPlayers();
+		await loadPlayers(selectedSeasonId);
 		await loadAllPlayersHistory();
-		// After initial load, track the season to detect future changes
-		if (selectedSeason) {
-			previousSeasonId = selectedSeason.id;
-		}
-		initialized = true;
+		previousSeasonId = selectedSeasonId;
 	});
 
 	onDestroy(() => {
@@ -148,14 +142,18 @@
 		}
 	});
 
-	// Reload players when season changes (but not on initial load)
+	// Reload players when season changes
 	$effect(() => {
-		if (initialized && selectedSeason !== null) {
-			const currentSeasonId = selectedSeason.id;
-			if (previousSeasonId !== currentSeasonId) {
-				loadPlayers();
-				previousSeasonId = currentSeasonId;
-			}
+		// Track selectedSeasonId changes
+		const currentSeasonId = selectedSeasonId;
+
+		// Skip initial run (undefined means not yet initialized)
+		if (previousSeasonId === undefined) return;
+
+		// Only reload if season actually changed
+		if (previousSeasonId !== currentSeasonId) {
+			loadPlayers(currentSeasonId);
+			previousSeasonId = currentSeasonId;
 		}
 	});
 
@@ -246,9 +244,11 @@
 		}
 	}
 
-	// Create chart reactively when data and canvas are ready
+	// Create chart reactively when data and canvas are ready (also when season changes)
 	$effect(() => {
 		if (chartCanvas && allPlayersHistory.length > 0 && !loadingChart) {
+			// Track selectedSeasonId to trigger re-render when it changes
+			void selectedSeasonId;
 			// Use requestAnimationFrame to ensure canvas is fully rendered
 			requestAnimationFrame(() => {
 				createChart();
@@ -259,8 +259,16 @@
 	function createChart() {
 		if (!chartCanvas || !allPlayersHistory.length) return;
 
+		// Filter history by selected season
+		const filteredHistory = allPlayersHistory.map(player => ({
+			...player,
+			history: selectedSeasonId
+				? player.history.filter(point => point.season_id === selectedSeasonId)
+				: player.history
+		}));
+
 		// Filter out players with no history and check if we have any data to display
-		const playersWithHistory = allPlayersHistory.filter(p => p.history.length > 0);
+		const playersWithHistory = filteredHistory.filter(p => p.history.length > 0);
 		if (playersWithHistory.length === 0) return;
 
 		// Destroy existing chart if any
@@ -357,7 +365,9 @@
 				plugins: {
 					title: {
 						display: true,
-						text: 'ALL PLAYERS ELO HISTORY',
+						text: selectedSeason
+							? `${selectedSeason.name.toUpperCase()} - ALL PLAYERS ELO HISTORY`
+							: 'ALL PLAYERS ELO HISTORY',
 						color: textColor,
 						font: {
 							size: 11,
@@ -520,8 +530,9 @@
 		openAddMatchModal(() => {
 			// Show success toast
 			showToast('Match recorded successfully!', 'success');
-			// Reload players after match is added
-			loadPlayers();
+			// Reload players and chart history after match is added
+			loadPlayers(selectedSeasonId);
+			loadAllPlayersHistory();
 		}, userName);
 	}
 </script>
@@ -573,19 +584,14 @@
 	{:else if error}
 		<div class="error">{error}</div>
 	{:else}
-		{#if loadingPlayers}
-			<div class="loading-overlay">
-				<div class="loading-message">Loading players...</div>
-			</div>
-		{/if}
 		<div class="controls">
 			{#if seasons.length > 0}
 				<select
-					bind:value={selectedSeason}
+					bind:value={selectedSeasonId}
 					class="season-selector"
 				>
 					{#each seasons as season}
-						<option value={season}>
+						<option value={season.id}>
 							{season.name}{season.is_active ? ' (Active)' : ''}
 						</option>
 					{/each}
@@ -829,36 +835,6 @@
 
 	.error {
 		opacity: 0.8;
-	}
-
-	.loading-overlay {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: var(--bg-primary, #ffffff);
-		opacity: 0.9;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 1000;
-	}
-
-	:global([data-theme='dark']) .loading-overlay {
-		background: #0a0a0a;
-	}
-
-	.loading-message {
-		font-size: 1rem;
-		color: var(--text-primary);
-		padding: 2rem;
-		border: 1px solid var(--border-subtle);
-		background: var(--bg-primary, #ffffff);
-	}
-
-	:global([data-theme='dark']) .loading-message {
-		background: #1a1a1a;
 	}
 
 	.controls {

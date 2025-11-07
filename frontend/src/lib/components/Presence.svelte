@@ -54,6 +54,7 @@
 					style="
 						left: {user.cursor.x}%;
 						top: {user.cursor.y}%;
+						--cursor-color: {user.color};
 					"
 				>
 					<svg
@@ -65,7 +66,7 @@
 					>
 						<path
 							d="M 2,2 L 2,16 L 6,12 L 9,18 L 11,17 L 8,11 L 14,11 Z"
-							fill="var(--text-primary)"
+							fill="var(--cursor-color)"
 							stroke="var(--bg-primary)"
 							stroke-width="1.5"
 							stroke-linejoin="round"
@@ -105,14 +106,15 @@
 		position: absolute;
 		top: 24px;
 		left: 8px;
-		background: var(--text-primary);
-		color: var(--bg-primary);
+		background: var(--cursor-color);
+		color: #ffffff;
 		padding: 0.25rem 0.5rem;
-		border: 1px solid var(--text-primary);
+		border: 1px solid var(--cursor-color);
 		font-size: 0.75rem;
-		font-weight: 400;
+		font-weight: 500;
 		white-space: nowrap;
 		letter-spacing: 0.02em;
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 	}
 
 	/* Smooth animations */
