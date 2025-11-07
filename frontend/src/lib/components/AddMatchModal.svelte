@@ -37,17 +37,21 @@
 	let player1Id = $state('');
 	let player2Id = $state('');
 
-	// Default to today at 1:00 PM
+	// Default to current local time rounded down to nearest 5-minute interval
 	function getDefaultDateTime(): string {
 		const now = new Date();
-		now.setHours(13, 0, 0, 0); // Set to 1:00 PM
+		// Round down to nearest 5-minute interval
+		const minutes = now.getMinutes();
+		const roundedMinutes = Math.floor(minutes / 5) * 5;
+		now.setMinutes(roundedMinutes, 0, 0); // Set minutes, seconds, and milliseconds in one call
+
 		// Format as YYYY-MM-DDTHH:MM for datetime-local input
 		const year = now.getFullYear();
 		const month = String(now.getMonth() + 1).padStart(2, '0');
 		const day = String(now.getDate()).padStart(2, '0');
 		const hours = String(now.getHours()).padStart(2, '0');
-		const minutes = String(now.getMinutes()).padStart(2, '0');
-		return `${year}-${month}-${day}T${hours}:${minutes}`;
+		const formattedMinutes = String(roundedMinutes).padStart(2, '0');
+		return `${year}-${month}-${day}T${hours}:${formattedMinutes}`;
 	}
 
 	let submittedAt = $state(getDefaultDateTime());
@@ -399,7 +403,7 @@
 						{/if}
 
 						<div class="form-group">
-							<label for="submittedAt">Match Date/Time (defaults to today at 1:00 PM)</label>
+							<label for="submittedAt">Match Date/Time</label>
 							<input
 								type="datetime-local"
 								id="submittedAt"
