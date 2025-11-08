@@ -387,21 +387,6 @@
 		gap: 1.5rem;
 	}
 
-	.nav-links a {
-		font-size: 0.875rem;
-		font-weight: 300;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		text-decoration: none;
-		color: inherit;
-		opacity: 0.7;
-		transition: opacity 0.2s ease;
-	}
-
-	.nav-links a:hover {
-		opacity: 1;
-	}
-
 	.nav-link-btn {
 		font-size: 0.875rem;
 		font-weight: 300;
