@@ -1,5 +1,5 @@
 <footer class="footer">
-	<p class="disclaimer">Everything on this Website was AI Generated</p>
+	<p class="disclaimer">100% of this Website was AI Generated</p>
 </footer>
 
 <style>
