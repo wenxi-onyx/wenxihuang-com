@@ -32,6 +32,12 @@
 		CategoryScale
 	);
 
+	// Cache configuration for player history
+	const PLAYER_HISTORY_CACHE_KEY = 'tt-players-history-matches-cache';
+	const PLAYER_HISTORY_CACHE_TIMESTAMP_KEY = 'tt-players-history-matches-timestamp';
+	const CACHE_FRESH_DURATION = 60 * 1000; // 60 seconds - data is considered fresh
+	const CACHE_STALE_DURATION = 300 * 1000; // 5 minutes - max age for stale-while-revalidate
+
 	const user = $derived($authStore.user);
 
 	let players = $state<PlayerWithStats[]>([]);
@@ -56,6 +62,20 @@
 	let chartCanvas = $state<HTMLCanvasElement | undefined>();
 	let chart: any | null = null;
 	let loadingChart = $state(false);
+
+	/**
+	 * Clear the player history cache from localStorage.
+	 * Used when cache is corrupted or invalid.
+	 */
+	function clearPlayerHistoryCache() {
+		try {
+			localStorage.removeItem(PLAYER_HISTORY_CACHE_KEY);
+			localStorage.removeItem(PLAYER_HISTORY_CACHE_TIMESTAMP_KEY);
+		} catch (e) {
+			// Silently handle localStorage errors (e.g., storage disabled, quota exceeded)
+			console.warn('Failed to clear player history cache:', e);
+		}
+	}
 
 	async function loadSeasons() {
 		try {
@@ -137,8 +157,13 @@
 	});
 
 	onDestroy(() => {
+		// Cleanup chart
 		if (chart) {
 			chart.destroy();
+		}
+		// Cleanup abort controller
+		if (abortController) {
+			abortController.abort();
 		}
 	});
 
@@ -197,45 +222,60 @@
 		filteredPlayers = filtered;
 	});
 
-	async function loadAllPlayersHistory() {
-		const CACHE_KEY = 'tt-players-history-matches-cache';
-		const CACHE_TIMESTAMP_KEY = 'tt-players-history-matches-timestamp';
-		const CACHE_DURATION = 60 * 1000; // 60 seconds
-
+	/**
+	 * Load all players' match history with caching
+	 * @param bypassCache - If true, skips both localStorage and HTTP cache (used after match submission)
+	 */
+	async function loadAllPlayersHistory(bypassCache: boolean = false) {
 		try {
-			// Try to load from cache first (synchronously)
-			const cachedData = localStorage.getItem(CACHE_KEY);
-			const cachedTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
-
 			let usedCache = false;
-			if (cachedData && cachedTimestamp) {
-				const age = Date.now() - parseInt(cachedTimestamp);
-				// Use cache if it's less than 5 minutes old (stale-while-revalidate)
-				if (age < 300000) {
-					allPlayersHistory = JSON.parse(cachedData);
-					usedCache = true;
 
-					// If cache is very fresh (< 60s), we can skip the loading state
-					if (age < CACHE_DURATION) {
-						// Don't need to fetch, data is fresh
-						return;
+			// Only check localStorage cache if not bypassing
+			if (!bypassCache) {
+				const cachedData = localStorage.getItem(PLAYER_HISTORY_CACHE_KEY);
+				const cachedTimestamp = localStorage.getItem(PLAYER_HISTORY_CACHE_TIMESTAMP_KEY);
+
+				if (cachedData && cachedTimestamp) {
+					const age = Date.now() - parseInt(cachedTimestamp, 10);
+
+					// Use cache if it's less than stale duration (stale-while-revalidate)
+					if (age < CACHE_STALE_DURATION) {
+						try {
+							allPlayersHistory = JSON.parse(cachedData);
+							usedCache = true;
+
+							// If cache is very fresh, skip fetching
+							if (age < CACHE_FRESH_DURATION) {
+								return;
+							}
+						} catch (parseError) {
+							// Cache is corrupted, clear it and fetch fresh
+							console.warn('Corrupted player history cache, clearing:', parseError);
+							clearPlayerHistoryCache();
+						}
 					}
 				}
 			}
 
-			// Fetch fresh data (only show spinner if we didn't have cache)
+			// Show loading spinner if we didn't use cache
 			if (!usedCache) {
 				loadingChart = true;
 			}
 
-			const freshData = await playersApi.getAllPlayersHistory();
+			// Fetch fresh data (bypasses HTTP cache if requested)
+			const freshData = await playersApi.getAllPlayersHistory(bypassCache);
 
 			// Update state with fresh data
 			allPlayersHistory = freshData;
 
 			// Save to cache
-			localStorage.setItem(CACHE_KEY, JSON.stringify(freshData));
-			localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+			try {
+				localStorage.setItem(PLAYER_HISTORY_CACHE_KEY, JSON.stringify(freshData));
+				localStorage.setItem(PLAYER_HISTORY_CACHE_TIMESTAMP_KEY, Date.now().toString());
+			} catch (storageError) {
+				// Silently handle storage errors (quota exceeded, etc.)
+				console.warn('Failed to save player history cache:', storageError);
+			}
 
 			loadingChart = false;
 		} catch (e) {
@@ -267,7 +307,7 @@
 				: player.history
 		}));
 
-		// Filter out players with no history and check if we have any data to display
+		// Filter out players with no history
 		const playersWithHistory = filteredHistory.filter(p => p.history.length > 0);
 		if (playersWithHistory.length === 0) return;
 
@@ -356,6 +396,7 @@
 			});
 		});
 
+		console.log(`[Chart] Creating new chart with ${datasets.length} datasets`);
 		chart = new Chart(ctx, {
 			type: 'line',
 			data: { datasets },
@@ -527,12 +568,16 @@
 			? [user.first_name, user.last_name].filter(Boolean).join(' ')
 			: undefined;
 
-		openAddMatchModal(() => {
+		openAddMatchModal(async () => {
 			// Show success toast
 			showToast('Match recorded successfully!', 'success');
-			// Reload players and chart history after match is added
-			loadPlayers(selectedSeasonId);
-			loadAllPlayersHistory();
+
+			// Reload players and chart history
+			// bypassCache=true forces fresh data by skipping both localStorage and HTTP cache
+			await Promise.all([
+				loadPlayers(selectedSeasonId),
+				loadAllPlayersHistory(true)
+			]);
 		}, userName);
 	}
 </script>

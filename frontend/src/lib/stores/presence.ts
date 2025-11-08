@@ -2,6 +2,9 @@ import { writable, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { authStore } from './auth';
 
+// Enable detailed logging only in development
+const DEBUG = import.meta.env.DEV;
+
 export interface CursorPosition {
 	x: number;
 	y: number;
@@ -85,14 +88,14 @@ class PresenceStore {
 		const wsUrl = apiUrl.replace(/^http/, 'ws') + '/api/presence/ws';
 
 		try {
-			console.log('Attempting to connect to WebSocket:', wsUrl);
+			if (DEBUG) console.log('Attempting to connect to WebSocket:', wsUrl);
 			this.ws = new WebSocket(wsUrl);
 
 			this.ws.onopen = () => {
-				console.log('✅ Presence WebSocket connected');
+				if (DEBUG) console.log('✅ Presence WebSocket connected');
 				// Rejoin current page if we were on one
 				if (this.currentPagePath) {
-					console.log('Rejoining page:', this.currentPagePath);
+					if (DEBUG) console.log('Rejoining page:', this.currentPagePath);
 					this.joinPage(this.currentPagePath);
 				}
 			};
@@ -100,7 +103,6 @@ class PresenceStore {
 			this.ws.onmessage = (event) => {
 				try {
 					const message: PresenceMessage = JSON.parse(event.data);
-					console.log('📨 Received presence message:', message);
 					this.handleMessage(message);
 				} catch (error) {
 					console.error('❌ Failed to parse presence message:', error);
@@ -112,7 +114,7 @@ class PresenceStore {
 			};
 
 			this.ws.onclose = (event) => {
-				console.log('⚠️ Presence WebSocket closed. Code:', event.code, 'Reason:', event.reason);
+				if (DEBUG) console.log('⚠️ Presence WebSocket closed. Code:', event.code, 'Reason:', event.reason);
 				this.ws = null;
 				// Try to reconnect after 3 seconds
 				this.reconnectTimeout = setTimeout(() => this.connect(), 3000);
@@ -147,22 +149,20 @@ class PresenceStore {
 					...u,
 					color: getUserColor(u.user_id) // Assign deterministic color
 				}));
-			console.log('👥 Updating users:', otherUsers.length, 'other users on this page');
 			this.users.set(otherUsers);
 		}
 	}
 
 	private send(message: PresenceMessage) {
 		if (this.ws?.readyState === WebSocket.OPEN) {
-			console.log('📤 Sending message:', message.type);
 			this.ws.send(JSON.stringify(message));
 		} else {
-			console.warn('⚠️ WebSocket not open, cannot send message:', message.type);
+			if (DEBUG) console.warn('⚠️ WebSocket not open, cannot send message:', message.type);
 		}
 	}
 
 	public joinPage(pagePath: string) {
-		console.log('🚪 Joining page:', pagePath);
+		if (DEBUG) console.log('🚪 Joining page:', pagePath);
 		this.currentPagePath = pagePath;
 		this.send({
 			type: 'join',

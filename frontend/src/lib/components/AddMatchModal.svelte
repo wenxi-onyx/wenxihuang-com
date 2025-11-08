@@ -233,12 +233,15 @@
 				submitted_at: submittedAtISO
 			});
 
-			// Close modal first
+			// Save callback before closing modal (closing clears the state)
+			const callback = modalState.onSuccess;
+
+			// Close modal
 			closeAddMatchModal();
 
-			// Then call onSuccess callback (which will show toast on parent page)
-			if (modalState.onSuccess) {
-				modalState.onSuccess();
+			// Call onSuccess callback (which will show toast and refresh data on parent page)
+			if (callback) {
+				await callback();
 			}
 		} catch (e) {
 			showToast(e instanceof Error ? e.message : 'Failed to record match', 'error');

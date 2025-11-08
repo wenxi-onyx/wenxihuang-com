@@ -430,10 +430,17 @@ export const playersApi = {
         });
     },
 
-    async getAllPlayersHistory(): Promise<PlayerEloHistory[]> {
-        return apiCall<PlayerEloHistory[]>('/api/players/history/all', {
+    async getAllPlayersHistory(bypassCache: boolean = false): Promise<PlayerEloHistory[]> {
+        const options: RequestInit = {
             method: 'GET',
-        });
+        };
+
+        // Bypass browser HTTP cache when needed (e.g., after match submission)
+        if (bypassCache) {
+            options.cache = 'no-store';
+        }
+
+        return apiCall<PlayerEloHistory[]>('/api/players/history/all', options);
     },
 };
 
