@@ -13,7 +13,7 @@
     $effect(() => {
         // Only redirect if auth has finished loading
         if (!$authStore.loading && (!user || user.role !== 'admin')) {
-            goto('/');
+            goto('/login');
         }
     });
 

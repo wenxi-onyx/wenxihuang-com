@@ -9,6 +9,14 @@
 
     const user = $derived($authStore.user);
 
+    // Redirect unauthenticated users - reactive to auth state changes
+    $effect(() => {
+        // Only redirect if auth has finished loading
+        if (!$authStore.loading && !user) {
+            goto('/login');
+        }
+    });
+
     // Profile form state
     let username = $state('');
     let firstName = $state('');

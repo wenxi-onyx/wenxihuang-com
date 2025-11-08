@@ -20,7 +20,7 @@
 				<FeatureCard title="TABLE TENNIS DATABASE" status="active" href="/table-tennis" delay="0.3s" />
 			</div>
 			<div class="card-wrapper card-3">
-				<FeatureCard title="MULTIPLAYER CHATGPT" status="inactive" delay="0.7s" />
+				<FeatureCard title="MULTIPLAYER CHATGPT" status="active" href="/plans" delay="0.7s" />
 			</div>
 		</div>
 	</section>

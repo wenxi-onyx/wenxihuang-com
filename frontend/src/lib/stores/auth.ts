@@ -10,13 +10,14 @@ export interface AuthState {
 function createAuthStore() {
     const { subscribe, set, update } = writable<AuthState>({
         user: null,
-        loading: false, // Start as false - auth check happens in background
+        loading: true, // Start as true - auth check happens on app load
     });
 
     return {
         subscribe,
 
         async checkAuth() {
+            update(state => ({ ...state, loading: true }));
             try {
                 const response = await authApi.getCurrentUser();
                 set({ user: response.user, loading: false });
