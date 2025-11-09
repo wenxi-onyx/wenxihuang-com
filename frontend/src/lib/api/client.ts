@@ -84,6 +84,17 @@ export interface ProfileResponse {
     user: User;
 }
 
+export interface ApiKeyResponse {
+    provider: string;
+    api_key_preview: string;
+    has_key: boolean;
+}
+
+export interface SaveApiKeyRequest {
+    provider: string;
+    api_key: string;
+}
+
 export const userApi = {
     async getProfile(): Promise<ProfileResponse> {
         return apiCall<ProfileResponse>('/api/user/profile', {
@@ -102,6 +113,25 @@ export const userApi = {
         return apiCall<{ message: string }>('/api/user/change-password', {
             method: 'POST',
             body: JSON.stringify(data),
+        });
+    },
+
+    async getApiKey(provider: string): Promise<ApiKeyResponse> {
+        return apiCall<ApiKeyResponse>(`/api/user/api-keys/${provider}`, {
+            method: 'GET',
+        });
+    },
+
+    async saveApiKey(data: SaveApiKeyRequest): Promise<{ message: string }> {
+        return apiCall<{ message: string }>('/api/user/api-keys', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async deleteApiKey(provider: string): Promise<{ message: string }> {
+        return apiCall<{ message: string }>(`/api/user/api-keys/${provider}`, {
+            method: 'DELETE',
         });
     },
 };

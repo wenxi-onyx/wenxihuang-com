@@ -50,6 +50,15 @@
 
 	let modal = $derived($modalStore);
 
+	// Lock body scroll when modal is open
+	$effect(() => {
+		if (modal) {
+			document.body.style.overflow = 'hidden';
+		} else {
+			document.body.style.overflow = '';
+		}
+	});
+
 	onMount(() => {
 		function handleEscape(e: KeyboardEvent) {
 			// Fix: Read current store value directly instead of closure capture
@@ -106,104 +115,7 @@
 {/if}
 
 <style>
-	.modal-backdrop {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.6);
-		backdrop-filter: blur(4px);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 10000;
-		animation: fadeIn 0.2s ease-out;
-	}
-
-	@keyframes fadeIn {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
-		}
-	}
-
-	.modal {
-		background: var(--bg-primary, #000);
-		border: 1px solid var(--border-subtle);
-		max-width: 500px;
-		width: calc(100% - 2rem);
-		margin: 1rem;
-		animation: slideUp 0.3s ease-out;
-	}
-
-	@keyframes slideUp {
-		from {
-			transform: translateY(20px);
-			opacity: 0;
-		}
-		to {
-			transform: translateY(0);
-			opacity: 1;
-		}
-	}
-
-	.modal-header {
-		padding: 1.5rem;
-		border-bottom: 1px solid var(--border-subtle);
-	}
-
-	.modal-header h2 {
-		font-size: 1rem;
-		font-weight: 300;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		margin: 0;
-		color: var(--text-primary);
-	}
-
-	.modal-body {
-		padding: 1.5rem;
-	}
-
-	.modal-body p {
-		font-size: 0.875rem;
-		font-weight: 300;
-		line-height: 1.6;
-		color: var(--text-primary);
-		opacity: 0.8;
-		margin: 0;
-		white-space: pre-line;
-	}
-
-	.modal-actions {
-		padding: 1.5rem;
-		border-top: 1px solid var(--border-subtle);
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.75rem;
-	}
-
-	.btn {
-		padding: 0.75rem 1.5rem;
-		font-size: 0.75rem;
-		font-weight: 300;
-		font-family: inherit;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		border: 1px solid var(--border-subtle);
-		background: transparent;
-		color: var(--text-primary);
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-
-	.btn:hover {
-		border-color: var(--border-active);
-	}
-
-	.btn-cancel:hover {
-		opacity: 0.8;
-	}
+	/* Using shared styles: modals.css (.modal-backdrop, .modal, .modal-header, .modal-body, .modal-actions), buttons.css (.btn, .btn-cancel), animations.css (fadeIn, slideUp) */
 
 	.btn-confirm.btn-danger:hover {
 		border-color: rgba(255, 100, 100, 0.5);
@@ -221,19 +133,5 @@
 		border-color: rgba(100, 200, 255, 0.5);
 		background: rgba(100, 200, 255, 0.1);
 		color: rgb(150, 220, 255);
-	}
-
-	@media (max-width: 768px) {
-		.modal {
-			max-width: none;
-		}
-
-		.modal-actions {
-			flex-direction: column-reverse;
-		}
-
-		.btn {
-			width: 100%;
-		}
 	}
 </style>

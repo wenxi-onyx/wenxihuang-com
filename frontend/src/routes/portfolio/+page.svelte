@@ -10,7 +10,7 @@
 	<section class="hero">
 		<div class="hero-content">
 			<h1 class="name">WENXI HUANG</h1>
-			<nav class="nav-links">
+			<nav class="social-links">
 				<a href="/">BACK</a>
 			</nav>
 		</div>
@@ -22,6 +22,8 @@
 </main>
 
 <style>
+	/* Using shared styles: layout.css (.social-links) */
+
 	.portfolio-page {
 		width: 100%;
 		display: flex;
@@ -64,31 +66,6 @@
 		font-family: 'Noto Sans JP', sans-serif;
 		font-weight: 100;
 		letter-spacing: 0.2em;
-	}
-
-	.nav-links {
-		display: flex;
-		gap: 2rem;
-	}
-
-	.nav-links a {
-		font-size: 0.75rem;
-		font-weight: 300;
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		text-decoration: underline;
-		text-decoration-thickness: 0.5px;
-		color: var(--text-primary);
-		transition: opacity 0.3s ease;
-	}
-
-	:global([data-theme='light']) .nav-links a {
-		font-weight: 200;
-		text-decoration-thickness: 0.5px;
-	}
-
-	.nav-links a:hover {
-		opacity: 0.6;
 	}
 
 	.content {

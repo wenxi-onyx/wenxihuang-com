@@ -4,6 +4,7 @@
 	import { authStore } from '$lib/stores/auth';
 	import { onMount } from 'svelte';
 	import Footer from '$lib/components/Footer.svelte';
+	import Toast from '$lib/components/Toast.svelte';
 
 	let { children } = $props();
 
@@ -25,6 +26,8 @@
 	<title>Wenxi Huang</title>
 	<meta name="description" content="Personal website of Wenxi Huang" />
 </svelte:head>
+
+<Toast />
 
 <div class="app-container">
 	<div class="content-wrapper">

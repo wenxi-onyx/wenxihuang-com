@@ -101,37 +101,7 @@
 		font-weight: 200;
 	}
 
-	.card-cta {
-		padding: 0.75rem 2rem;
-		font-size: 0.875rem;
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		background: transparent;
-		cursor: pointer;
-		transition: all 0.3s ease;
-		border: none;
-	}
-
-	:global([data-theme='dark']) .card-cta {
-		color: #ffffff;
-		border: 1px solid #ffffff;
-	}
-
-	:global([data-theme='dark']) .card-cta:hover {
-		background: #ffffff;
-		color: #000000;
-	}
-
-	:global([data-theme='light']) .card-cta {
-		color: #000000;
-		border: 0.5px solid #000000;
-		font-weight: 200;
-	}
-
-	:global([data-theme='light']) .card-cta:hover {
-		background: #000000;
-		color: #ffffff;
-	}
+	/* Button styles now use shared .card-cta from buttons.css */
 
 	.card-status {
 		font-size: 0.75rem;

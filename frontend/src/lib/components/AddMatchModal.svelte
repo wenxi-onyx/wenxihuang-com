@@ -83,6 +83,9 @@
 			// Reset form when modal opens
 			resetForm();
 
+			// Lock body scroll when modal opens
+			document.body.style.overflow = 'hidden';
+
 			// Always reload data to ensure freshness
 			loadData();
 		} else {
@@ -91,6 +94,9 @@
 				loadAbortController.abort();
 				loadAbortController = null;
 			}
+
+			// Restore body scroll when modal closes
+			document.body.style.overflow = '';
 		}
 	});
 
@@ -284,7 +290,7 @@
 	>
 		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<div
-			class="modal"
+			class="modal modal-lg"
 			onclick={(e) => e.stopPropagation()}
 			role="dialog"
 			tabindex="-1"
@@ -293,7 +299,7 @@
 		>
 			<div class="modal-header">
 				<h2 id="modal-title">Add Match Result</h2>
-				<button class="close-btn" onclick={handleClose} disabled={submitting}>×</button>
+				<button class="modal-close" onclick={handleClose} disabled={submitting}>×</button>
 			</div>
 
 			<div class="modal-body">
@@ -416,16 +422,16 @@
 							<p class="help-text">Adjust the date and time as needed. Individual game times will be calculated automatically.</p>
 						</div>
 
-						<div class="form-actions">
+						<div class="modal-actions">
 							<button
 								type="button"
-								class="btn btn-secondary"
+								class="btn btn-cancel"
 								onclick={handleClose}
 								disabled={submitting}
 							>
 								Cancel
 							</button>
-							<button type="submit" class="btn btn-primary" disabled={submitting || !bothPlayersSelected || player1GamesWon + player2GamesWon === 0}>
+							<button type="submit" class="btn-primary" disabled={submitting || !bothPlayersSelected || player1GamesWon + player2GamesWon === 0}>
 								{submitting ? 'Recording...' : 'Record Match'}
 							</button>
 						</div>
@@ -437,107 +443,18 @@
 {/if}
 
 <style>
+	/* Using shared styles: modals.css (.modal-backdrop, .modal, .modal-lg, .modal-header, .modal-close, .modal-body, .modal-actions), forms.css (.form-group, label, input, select), buttons.css (.btn, .btn-primary, .btn-cancel), animations.css (fadeIn, slideUp), utilities.css (.loading) */
+
 	.modal-backdrop {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.6);
-		backdrop-filter: blur(4px);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 10000;
-		animation: fadeIn 0.2s ease-out;
 		overflow-y: auto;
 		padding: 2rem 0;
 	}
 
-	@keyframes fadeIn {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
-		}
-	}
-
-	.modal {
-		background: var(--bg-primary, #000);
-		border: 1px solid var(--border-subtle);
-		max-width: 800px;
-		width: calc(100% - 2rem);
-		margin: auto;
-		animation: slideUp 0.3s ease-out;
-		max-height: calc(100vh - 4rem);
-		overflow-y: auto;
-	}
-
-	@keyframes slideUp {
-		from {
-			transform: translateY(20px);
-			opacity: 0;
-		}
-		to {
-			transform: translateY(0);
-			opacity: 1;
-		}
-	}
-
 	.modal-header {
-		padding: 1.5rem;
-		border-bottom: 1px solid var(--border-subtle);
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
 		position: sticky;
 		top: 0;
 		background: var(--bg-primary);
 		z-index: 10;
-	}
-
-	.modal-header h2 {
-		font-size: 1rem;
-		font-weight: 300;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		margin: 0;
-		color: var(--text-primary);
-	}
-
-	.close-btn {
-		background: none;
-		border: none;
-		font-size: 2rem;
-		line-height: 1;
-		cursor: pointer;
-		color: var(--text-primary);
-		opacity: 0.5;
-		transition: opacity 0.2s ease;
-		padding: 0;
-		width: 2rem;
-		height: 2rem;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.close-btn:hover:not(:disabled) {
-		opacity: 1;
-	}
-
-	.close-btn:disabled {
-		cursor: not-allowed;
-		opacity: 0.3;
-	}
-
-	.modal-body {
-		padding: 2rem;
-	}
-
-	.loading {
-		text-align: center;
-		padding: 3rem;
-		font-size: 1rem;
-		color: var(--text-primary);
 	}
 
 	.error-card {
@@ -579,45 +496,6 @@
 		gap: 2rem;
 		align-items: end;
 		margin-bottom: 2rem;
-	}
-
-	.form-group {
-		display: flex;
-		flex-direction: column;
-	}
-
-	label {
-		display: block;
-		margin-bottom: 0.5rem;
-		font-weight: 300;
-		font-size: 0.875rem;
-		color: var(--text-primary);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
-	select,
-	input[type="datetime-local"] {
-		width: 100%;
-		padding: 0.75rem;
-		font-size: 1rem;
-		font-family: inherit;
-		border: 1px solid var(--border-subtle);
-		background: transparent;
-		color: var(--text-primary);
-		outline: none;
-		transition: border-color 0.2s ease;
-	}
-
-	select:focus,
-	input:focus {
-		border-color: var(--border-active);
-	}
-
-	select:disabled,
-	input:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
 	}
 
 	select option {
@@ -796,57 +674,6 @@
 		letter-spacing: normal;
 	}
 
-	.form-actions {
-		display: flex;
-		gap: 1rem;
-		justify-content: flex-end;
-		margin-top: 2rem;
-		padding-top: 1.5rem;
-		border-top: 1px solid var(--border-subtle);
-	}
-
-	.btn {
-		padding: 0.75rem 2rem;
-		font-size: 0.875rem;
-		font-weight: 300;
-		font-family: inherit;
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		text-decoration: none;
-		border: 1px solid var(--border-subtle);
-		background: transparent;
-		color: var(--text-primary);
-		cursor: pointer;
-		transition: all 0.2s ease;
-		display: inline-block;
-		text-align: center;
-	}
-
-	.btn:hover:not(:disabled) {
-		border-color: var(--border-active);
-		opacity: 0.8;
-	}
-
-	.btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.btn-primary {
-		background: var(--text-primary);
-		color: var(--bg-primary);
-		border-color: var(--text-primary);
-	}
-
-	.btn-primary:hover:not(:disabled) {
-		opacity: 0.9;
-	}
-
-	.btn-secondary {
-		background: transparent;
-		color: var(--text-primary);
-	}
-
 	@media (max-width: 768px) {
 		.modal {
 			max-width: none;
@@ -888,12 +715,5 @@
 			justify-self: end;
 		}
 
-		.form-actions {
-			flex-direction: column-reverse;
-		}
-
-		.btn {
-			width: 100%;
-		}
 	}
 </style>

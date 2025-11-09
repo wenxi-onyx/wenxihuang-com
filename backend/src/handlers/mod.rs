@@ -1,7 +1,10 @@
 pub mod admin;
 pub mod auth;
 pub mod elo;
+pub mod jobs;
 pub mod matches;
+pub mod plan_ws;
+pub mod plans;
 pub mod players;
 pub mod presence;
 pub mod seasons;

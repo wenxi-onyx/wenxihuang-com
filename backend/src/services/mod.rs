@@ -1,6 +1,10 @@
+pub mod ai_integration;
 pub mod elo;
+pub mod encryption;
 pub mod jobs;
 pub mod password;
+pub mod plan_broadcast;
 pub mod presence;
+pub mod prompts;
 pub mod seasons;
 pub mod session;

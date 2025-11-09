@@ -1,0 +1,154 @@
+/* Shared Table Styles */
+
+.table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--border-subtle);
+    background: transparent;
+}
+
+.leaderboard-table,
+.data-table,
+.players-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.leaderboard-table thead,
+.data-table thead,
+.players-table thead {
+    background: transparent;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.leaderboard-table th,
+.data-table th,
+.players-table th {
+    text-align: center;
+    padding: 1rem;
+    font-size: 0.75rem;
+    font-weight: 300;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-primary);
+    opacity: 0.8;
+    vertical-align: bottom;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+.leaderboard-table td,
+.data-table td,
+.players-table td {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 0.875rem;
+    font-weight: 300;
+    color: var(--text-primary);
+    text-align: center;
+}
+
+.leaderboard-table tbody tr:hover,
+.data-table tbody tr:hover,
+.players-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+:global([data-theme='light']) .leaderboard-table tbody tr:hover,
+:global([data-theme='light']) .data-table tbody tr:hover,
+:global([data-theme='light']) .players-table tbody tr:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+/* Clickable rows */
+.leaderboard-table tbody tr.clickable,
+.data-table tbody tr.clickable {
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+/* Table alignment helpers */
+.text-center {
+    text-align: center;
+}
+
+.text-right {
+    text-align: right;
+}
+
+/* Rank column styling */
+.rank-cell {
+    font-weight: 300;
+    opacity: 0.7;
+    width: 3rem;
+}
+
+/* Name/link cells */
+.name-cell a {
+    text-decoration: none;
+    color: var(--text-primary);
+    transition: opacity 0.2s ease;
+}
+
+.name-cell a:hover {
+    opacity: 0.7;
+}
+
+/* Stats cells */
+.stats-cell {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Actions cell */
+.actions-cell {
+    white-space: nowrap;
+}
+
+.actions-cell button {
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    margin-right: 0.5rem;
+}
+
+/* Responsive tables */
+@media (max-width: 768px) {
+    .leaderboard-table th,
+    .data-table th,
+    .leaderboard-table td,
+    .data-table td {
+        padding: 0.75rem 0.5rem;
+        font-size: 0.875rem;
+    }
+
+    .leaderboard-table th,
+    .data-table th {
+        font-size: 0.625rem;
+    }
+}
+
+/* Table search/filter section */
+.table-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+@media (max-width: 768px) {
+    .table-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+.table-search {
+    flex: 1;
+    max-width: 400px;
+}
+
+@media (max-width: 768px) {
+    .table-search {
+        max-width: none;
+    }
+}

@@ -44,6 +44,8 @@
 </div>
 
 <style>
+    /* Using shared styles: animations.css (slideIn) */
+
     .toast-container {
         position: fixed;
         bottom: 2rem;
@@ -51,7 +53,7 @@
         display: flex;
         flex-direction: column;
         gap: 0.75rem;
-        z-index: 9999;
+        z-index: 10001;
     }
 
     .toast {
@@ -66,29 +68,18 @@
         animation: slideIn 0.3s ease-out;
     }
 
-    @keyframes slideIn {
-        from {
-            transform: translateX(-100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-
     .toast-success {
         opacity: 0.95;
     }
 
     :global([data-theme='dark']) .toast-success {
-        border-color: rgba(255, 255, 255, 0.3);
-        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(34, 197, 94, 0.4);
+        background: rgba(34, 197, 94, 0.1);
     }
 
     :global([data-theme='light']) .toast-success {
-        border-color: rgba(0, 0, 0, 0.2);
-        background: rgba(0, 0, 0, 0.05);
+        border-color: rgba(22, 163, 74, 0.3);
+        background: rgba(34, 197, 94, 0.08);
         font-weight: 200;
     }
 
@@ -97,13 +88,13 @@
     }
 
     :global([data-theme='dark']) .toast-error {
-        border-color: rgba(255, 255, 255, 0.3);
-        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(239, 68, 68, 0.4);
+        background: rgba(239, 68, 68, 0.1);
     }
 
     :global([data-theme='light']) .toast-error {
-        border-color: rgba(0, 0, 0, 0.2);
-        background: rgba(0, 0, 0, 0.05);
+        border-color: rgba(220, 38, 38, 0.3);
+        background: rgba(239, 68, 68, 0.08);
         font-weight: 200;
     }
 

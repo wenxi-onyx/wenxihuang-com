@@ -5,6 +5,7 @@ use sqlx::PgPool;
 use super::auth::UserInfo;
 use crate::error::AuthError;
 use crate::models::user::User;
+use crate::services::encryption;
 use crate::services::password::{hash_password, verify_password};
 
 #[derive(Debug, Deserialize)]
@@ -23,6 +24,19 @@ pub struct ChangePasswordRequest {
 #[derive(Debug, Serialize)]
 pub struct ProfileResponse {
     pub user: UserInfo,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SaveApiKeyRequest {
+    pub provider: String,
+    pub api_key: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ApiKeyResponse {
+    pub provider: String,
+    pub api_key_preview: String, // Only shows last 4 characters
+    pub has_key: bool,
 }
 
 /// Get current user's profile
@@ -120,5 +134,144 @@ pub async fn change_password(
 
     Ok(Json(serde_json::json!({
         "message": "Password changed successfully"
+    })))
+}
+
+/// Get API key status for a provider (returns preview only)
+pub async fn get_api_key(
+    State(pool): State<PgPool>,
+    Extension(user): Extension<User>,
+    axum::extract::Path(provider): axum::extract::Path<String>,
+) -> Result<Json<ApiKeyResponse>, AuthError> {
+    // Validate provider
+    if provider != "anthropic" {
+        return Err(AuthError::InvalidInput(
+            "Only 'anthropic' provider is supported".to_string(),
+        ));
+    }
+
+    let result = sqlx::query_as::<_, (String,)>(
+        r#"
+        SELECT encrypted_key FROM user_api_keys
+        WHERE user_id = $1 AND provider = $2
+        "#,
+    )
+    .bind(user.id)
+    .bind(&provider)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|_| AuthError::DatabaseError)?;
+
+    if let Some((encrypted_key,)) = result {
+        // Decrypt to get the actual key
+        let api_key = encryption::decrypt(&encrypted_key).map_err(|_| AuthError::DatabaseError)?;
+
+        // Create preview (last 4 characters)
+        let preview = if api_key.len() > 4 {
+            format!("...{}", &api_key[api_key.len() - 4..])
+        } else {
+            "****".to_string()
+        };
+
+        Ok(Json(ApiKeyResponse {
+            provider,
+            api_key_preview: preview,
+            has_key: true,
+        }))
+    } else {
+        Ok(Json(ApiKeyResponse {
+            provider,
+            api_key_preview: String::new(),
+            has_key: false,
+        }))
+    }
+}
+
+/// Save or update API key for a provider
+pub async fn save_api_key(
+    State(pool): State<PgPool>,
+    Extension(user): Extension<User>,
+    Json(req): Json<SaveApiKeyRequest>,
+) -> Result<Json<serde_json::Value>, AuthError> {
+    // Validate provider
+    if req.provider != "anthropic" {
+        return Err(AuthError::InvalidInput(
+            "Only 'anthropic' provider is supported".to_string(),
+        ));
+    }
+
+    // Validate API key format (basic validation)
+    let api_key = req.api_key.trim();
+
+    if api_key.is_empty() {
+        return Err(AuthError::InvalidInput(
+            "API key cannot be empty".to_string(),
+        ));
+    }
+
+    // Anthropic API keys start with "sk-ant-" and are typically 100+ characters
+    if !api_key.starts_with("sk-ant-") {
+        return Err(AuthError::InvalidInput(
+            "Invalid Anthropic API key format. Keys should start with 'sk-ant-'".to_string(),
+        ));
+    }
+
+    if api_key.len() < 50 {
+        return Err(AuthError::InvalidInput(
+            "API key appears to be too short to be valid".to_string(),
+        ));
+    }
+
+    // Encrypt the API key (use trimmed version)
+    let encrypted_key = encryption::encrypt(api_key).map_err(|_| AuthError::DatabaseError)?;
+
+    // Insert or update the API key
+    sqlx::query(
+        r#"
+        INSERT INTO user_api_keys (user_id, provider, encrypted_key)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id, provider)
+        DO UPDATE SET encrypted_key = $3, updated_at = NOW()
+        "#,
+    )
+    .bind(user.id)
+    .bind(&req.provider)
+    .bind(&encrypted_key)
+    .execute(&pool)
+    .await
+    .map_err(|_| AuthError::DatabaseError)?;
+
+    Ok(Json(serde_json::json!({
+        "message": "API key saved successfully"
+    })))
+}
+
+/// Delete API key for a provider
+pub async fn delete_api_key(
+    State(pool): State<PgPool>,
+    Extension(user): Extension<User>,
+    axum::extract::Path(provider): axum::extract::Path<String>,
+) -> Result<Json<serde_json::Value>, AuthError> {
+    // Validate provider
+    if provider != "anthropic" {
+        return Err(AuthError::InvalidInput(
+            "Only 'anthropic' provider is supported".to_string(),
+        ));
+    }
+
+    sqlx::query(
+        r#"
+        DELETE FROM user_api_keys
+        WHERE user_id = $1 AND provider = $2
+        "#,
+    )
+    .bind(user.id)
+    .bind(&provider)
+    .execute(&pool)
+    .await
+    .map_err(|_| AuthError::DatabaseError)?;
+
+    Ok(Json(serde_json::json!({
+        "message": "API key deleted successfully"
     })))
 }

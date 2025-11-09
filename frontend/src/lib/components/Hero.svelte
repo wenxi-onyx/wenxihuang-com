@@ -21,6 +21,8 @@
 </section>
 
 <style>
+	/* Using shared styles: layout.css (.social-links), animations.css (fadeIn) */
+
 	.hero {
 		display: flex;
 		flex-direction: column;
@@ -62,8 +64,6 @@
 	}
 
 	.social-links {
-		display: flex;
-		gap: 2rem;
 		opacity: 1;
 	}
 
@@ -72,46 +72,6 @@
 		animation: fadeIn 1s ease-out 0.5s forwards;
 	}
 
-	.social-links a {
-		font-size: 0.75rem;
-		font-weight: 300;
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		text-decoration: underline;
-		text-decoration-thickness: 0.5px;
-		color: var(--text-primary);
-		transition: opacity 0.3s ease;
-	}
-
-	:global([data-theme='light']) .social-links a {
-		font-weight: 200;
-		text-decoration-thickness: 0.5px;
-	}
-
-	.social-links a:hover {
-		opacity: 0.6;
-	}
-
-	@keyframes fadeIn {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
-		}
-	}
-
-	@media (max-width: 768px) {
-		.social-links {
-			gap: 1.5rem;
-			flex-wrap: wrap;
-			justify-content: center;
-		}
-
-		.social-links a {
-			font-size: 0.75rem;
-		}
-	}
 
 	@media (prefers-reduced-motion: reduce) {
 		.name,

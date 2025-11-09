@@ -5,7 +5,7 @@
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import LoginButton from '$lib/components/LoginButton.svelte';
 	import AddMatchModal, { openAddMatchModal } from '$lib/components/AddMatchModal.svelte';
-	import Toast, { showToast } from '$lib/components/Toast.svelte';
+	import { showToast } from '$lib/components/Toast.svelte';
 	import Presence from '$lib/components/Presence.svelte';
 	import {
 		Chart,
@@ -589,7 +589,6 @@
 <ThemeToggle />
 <LoginButton />
 <AddMatchModal />
-<Toast />
 <Presence />
 
 <div class="container">
@@ -597,7 +596,7 @@
 		<h1>Table Tennis Leaderboard</h1>
 		<nav class="nav-links">
 			{#if user}
-				<button class="nav-link-btn" onclick={handleAddMatch}>
+				<button class="nav-link add-match-link" onclick={handleAddMatch}>
 					<span class="plus-icon">+</span> ADD MATCH
 				</button>
 			{/if}
@@ -605,22 +604,22 @@
 			{#if user}
 				<div class="dropdown">
 					<button
-						class="dropdown-toggle"
+						class="nav-link dropdown-toggle"
 						onclick={() => showManageDropdown = !showManageDropdown}
 						onblur={() => setTimeout(() => showManageDropdown = false, 200)}
 					>
-						MANAGE ▾
+						MANAGE <span class="dropdown-arrow">▾</span>
 					</button>
 					{#if showManageDropdown}
 						<div class="dropdown-menu">
 							<a href="/table-tennis/seasons" class="dropdown-item">Seasons</a>
-							<a href="/table-tennis/admin" class="dropdown-item">Elo Algorithms</a>
-							<a href="/table-tennis/admin/players" class="dropdown-item">Players</a>
+							<a href="/table-tennis/algorithms" class="dropdown-item">Elo Algorithms</a>
+							<a href="/table-tennis/players" class="dropdown-item">Players</a>
 						</div>
 					{/if}
 				</div>
 			{/if}
-			<button class="nav-link-btn" onclick={() => window.history.back()}>BACK</button>
+			<a href="/" class="nav-link">BACK</a>
 		</nav>
 	</header>
 
@@ -733,80 +732,21 @@
 </div>
 
 <style>
-	.container {
-		max-width: 1200px;
-		margin: 0 auto;
-		padding: 6rem 2rem 4rem 2rem;
-	}
+	/* Using shared styles: layout.css (.container, .page-header, .nav-links, .nav-link), buttons.css (.btn-view), tables.css (.table-wrapper, .leaderboard-table, .rank-cell, .name-cell), utilities.css (.loading, .error), animations.css (spin) */
 
-	.page-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 3rem;
-		padding-bottom: 1rem;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-	}
-
-	.page-header h1 {
-		font-size: clamp(1.5rem, 4vw, 2.5rem);
-		font-weight: 300;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		margin: 0;
-		color: var(--text-primary);
-	}
-
-	.nav-links {
-		display: flex;
-		align-items: center;
-		gap: 2rem;
-	}
-
-	.nav-links a {
-		font-size: 0.875rem;
-		font-weight: 300;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		text-decoration: none;
-		color: inherit;
-		opacity: 0.7;
-		transition: opacity 0.2s ease;
-		line-height: 1;
-	}
-
-	.nav-links a:hover {
-		opacity: 1;
-	}
-
-	.nav-link-btn {
-		font-size: 0.875rem;
-		font-weight: 300;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		text-decoration: none;
-		color: inherit;
-		opacity: 0.7;
-		transition: opacity 0.2s ease;
-		line-height: 1;
+	.add-match-link,
+	.add-match-link:hover {
+		/* Buttons styled as links to match MATCH HISTORY appearance */
 		background: none;
 		border: none;
-		cursor: pointer;
 		padding: 0;
-		margin: 0;
-		font-family: inherit;
-		appearance: none;
-		display: flex;
+		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.nav-link-btn:hover {
-		opacity: 1;
+		gap: 0.25rem;
 	}
 
 	.plus-icon {
-		font-size: 1.2rem;
+		font-size: 0.875rem;
 		line-height: 1;
 		font-weight: 300;
 	}
@@ -816,14 +756,7 @@
 	}
 
 	.dropdown-toggle {
-		font-size: 0.875rem;
-		font-weight: 300;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		text-decoration: none;
-		color: inherit;
-		opacity: 0.7;
-		transition: opacity 0.2s ease;
+		/* Text formatting inherited from .nav-link */
 		background: none;
 		border: none;
 		cursor: pointer;
@@ -831,11 +764,11 @@
 		margin: 0;
 		font-family: inherit;
 		appearance: none;
-		line-height: 1;
 	}
 
-	.dropdown-toggle:hover {
-		opacity: 1;
+	.dropdown-arrow {
+		font-size: 1.1rem;
+		line-height: 1;
 	}
 
 	.dropdown-menu {
@@ -871,16 +804,6 @@
 		background: var(--border-subtle);
 	}
 
-	.loading, .error {
-		text-align: center;
-		padding: 3rem;
-		font-size: 1rem;
-		color: var(--text-primary);
-	}
-
-	.error {
-		opacity: 0.8;
-	}
 
 	.controls {
 		display: flex;
@@ -961,45 +884,13 @@
 		opacity: 0.7;
 	}
 
-	.table-wrapper {
-		overflow-x: auto;
-		border: 1px solid var(--border-subtle);
-		background: transparent;
-	}
-
-	.leaderboard-table {
-		width: 100%;
-		border-collapse: collapse;
-	}
-
-	.leaderboard-table thead {
-		background: transparent;
-		border-bottom: 1px solid var(--border-subtle);
-	}
-
-	.leaderboard-table th {
-		padding: 1rem;
-		text-align: left;
-		font-weight: 300;
-		color: var(--text-primary);
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		opacity: 0.8;
-	}
-
-	:global([data-theme='dark']) .leaderboard-table th {
-		font-weight: 500;
-	}
-
-	:global([data-theme='light']) .leaderboard-table th {
-		font-weight: 200;
-	}
+	/* Table header and row borders now handled by shared tables.css */
 
 	.leaderboard-table th.sortable {
 		cursor: pointer;
 		user-select: none;
 		transition: opacity 0.2s;
+		position: relative;
 	}
 
 	.leaderboard-table th.sortable:hover {
@@ -1007,8 +898,8 @@
 	}
 
 	.sort-arrow {
-		display: inline-block;
-		width: 0.75em;
+		position: absolute;
+		margin-left: 0.25em;
 		opacity: 0;
 		transition: opacity 0.2s;
 	}
@@ -1018,36 +909,17 @@
 	}
 
 	.leaderboard-table tbody tr {
-		border-bottom: 1px solid var(--border-subtle);
 		transition: opacity 0.15s;
-	}
-
-	.leaderboard-table tbody tr:hover {
-		opacity: 0.8;
 	}
 
 	.leaderboard-table tbody tr.inactive {
 		opacity: 0.5;
 	}
 
-	.leaderboard-table td {
-		padding: 1rem;
-		font-size: 0.875rem;
-		color: var(--text-primary);
-	}
-
-	.rank-cell {
-		font-weight: 300;
-	}
-
 	.rank {
 		display: inline-block;
 		min-width: 2rem;
 		text-align: center;
-	}
-
-	.name-cell {
-		font-weight: 300;
 	}
 
 	:global([data-theme='dark']) .name-cell {
@@ -1111,28 +983,6 @@
 		font-weight: 300;
 	}
 
-	.btn-view {
-		display: inline-block;
-		padding: 0.5rem 0;
-		font-size: 0.75rem;
-		font-weight: 300;
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		color: var(--text-primary);
-		text-decoration: underline;
-		text-decoration-thickness: 0.5px;
-		border: none;
-		background: transparent;
-		transition: opacity 0.3s ease;
-	}
-
-	:global([data-theme='light']) .btn-view {
-		font-weight: 200;
-	}
-
-	.btn-view:hover {
-		opacity: 0.6;
-	}
 
 	.no-results {
 		text-align: center;
@@ -1173,12 +1023,6 @@
 		animation: spin 0.8s linear infinite;
 	}
 
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-
 	@media (max-width: 768px) {
 		.chart-container {
 			height: 400px;
@@ -1197,15 +1041,6 @@
 	}
 
 	@media (max-width: 768px) {
-		.container {
-			padding: 5rem 1rem 3rem 1rem;
-		}
-
-		.page-header {
-			flex-direction: column;
-			gap: 1rem;
-			align-items: flex-start;
-		}
 
 		.controls {
 			flex-direction: column;

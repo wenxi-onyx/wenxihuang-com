@@ -5,7 +5,7 @@
     import { goto } from '$app/navigation';
     import ThemeToggle from '$lib/components/ThemeToggle.svelte';
     import LoginButton from '$lib/components/LoginButton.svelte';
-    import Toast, { showToast } from '$lib/components/Toast.svelte';
+    import { showToast } from '$lib/components/Toast.svelte';
 
     const user = $derived($authStore.user);
 
@@ -29,12 +29,28 @@
     let confirmPassword = $state('');
     let passwordLoading = $state(false);
 
+    // API Key form state
+    let anthropicApiKey = $state('');
+    let apiKeyPreview = $state('');
+    let hasApiKey = $state(false);
+    let apiKeyLoading = $state(false);
+    let showApiKey = $state(false);
+
     // Initialize form with user data
-    onMount(() => {
+    onMount(async () => {
         if (user) {
             username = user.username || '';
             firstName = user.first_name || '';
             lastName = user.last_name || '';
+
+            // Load API key status
+            try {
+                const apiKeyResponse = await userApi.getApiKey('anthropic');
+                hasApiKey = apiKeyResponse.has_key;
+                apiKeyPreview = apiKeyResponse.api_key_preview;
+            } catch (error) {
+                // Silently fail - user might not have API key set yet
+            }
         }
     });
 
@@ -132,6 +148,60 @@
             passwordLoading = false;
         }
     }
+
+    async function handleApiKeySave(e: Event) {
+        e.preventDefault();
+        apiKeyLoading = true;
+
+        try {
+            await userApi.saveApiKey({
+                provider: 'anthropic',
+                api_key: anthropicApiKey,
+            });
+
+            // Reload API key status
+            const apiKeyResponse = await userApi.getApiKey('anthropic');
+            hasApiKey = apiKeyResponse.has_key;
+            apiKeyPreview = apiKeyResponse.api_key_preview;
+
+            // Clear the input field
+            anthropicApiKey = '';
+            showApiKey = false;
+
+            showToast('API key saved successfully!', 'success');
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : 'Failed to save API key', 'error');
+        } finally {
+            apiKeyLoading = false;
+        }
+    }
+
+    async function handleApiKeyDelete() {
+        if (!confirm('Are you sure you want to delete your Anthropic API key?')) {
+            return;
+        }
+
+        apiKeyLoading = true;
+
+        try {
+            await userApi.deleteApiKey('anthropic');
+            hasApiKey = false;
+            apiKeyPreview = '';
+            anthropicApiKey = '';
+            showToast('API key deleted successfully!', 'success');
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : 'Failed to delete API key', 'error');
+        } finally {
+            apiKeyLoading = false;
+        }
+    }
+
+    function handleApiKeyFormKeydown(e: KeyboardEvent) {
+        // Only allow Enter to submit if focus is on the API key input
+        if (e.key === 'Enter' && (e.target as HTMLElement).id !== 'anthropicApiKey') {
+            e.preventDefault();
+        }
+    }
 </script>
 
 <ThemeToggle />
@@ -148,7 +218,7 @@
 
         <!-- Profile Information Section -->
         <section class="settings-section">
-            <h2 class="section-title">PROFILE INFORMATION</h2>
+            <h2 class="section-title">PROFILE</h2>
 
             <form onsubmit={handleProfileUpdate} onkeydown={handleProfileFormKeydown}>
                 <div class="form-group">
@@ -188,7 +258,7 @@
                 <button
                     type="submit"
                     disabled={profileLoading}
-                    class="submit-btn"
+                    class="btn"
                 >
                     {profileLoading ? 'SAVING...' : 'SAVE PROFILE'}
                 </button>
@@ -234,18 +304,61 @@
                 <button
                     type="submit"
                     disabled={passwordLoading}
-                    class="submit-btn"
+                    class="btn"
                 >
                     {passwordLoading ? 'CHANGING...' : 'CHANGE PASSWORD'}
                 </button>
             </form>
         </section>
+
+        <!-- API Keys Section -->
+        <section class="settings-section">
+            <h2 class="section-title">API KEYS</h2>
+
+            <form onsubmit={handleApiKeySave} onkeydown={handleApiKeyFormKeydown}>
+                {#if hasApiKey && !showApiKey}
+                    <div class="form-group">
+                        <label for="anthropicApiKey">ANTHROPIC API KEY</label>
+                        <div class="api-key-status">
+                            <p class="api-key-preview">Current key: {apiKeyPreview}</p>
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        onclick={() => showApiKey = true}
+                        class="btn"
+                    >
+                        UPDATE KEY
+                    </button>
+                {:else}
+                    <div class="form-group">
+                        <label for="anthropicApiKey">ANTHROPIC API KEY</label>
+                        <input
+                            type="password"
+                            id="anthropicApiKey"
+                            bind:value={anthropicApiKey}
+                            placeholder="sk-ant-..."
+                            required={!hasApiKey}
+                        />
+                    </div>
+
+                    <button
+                        type="submit"
+                        disabled={apiKeyLoading || !anthropicApiKey}
+                        class="btn"
+                    >
+                        {apiKeyLoading ? 'SAVING...' : hasApiKey ? 'UPDATE KEY' : 'SAVE KEY'}
+                    </button>
+                {/if}
+            </form>
+        </section>
     </div>
 </main>
 
-<Toast />
-
 <style>
+    /* Using shared styles: buttons.css (.btn, .btn-primary), forms.css (.form-group, label, input), layout.css (.page-header, .nav-links, .section-title) */
+
     .settings-page {
         display: flex;
         flex-direction: column;
@@ -265,46 +378,15 @@
     }
 
     .page-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
         margin-bottom: 0;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         width: 100%;
     }
 
-    .page-header h1 {
-        font-size: clamp(1.5rem, 4vw, 2.5rem);
-        font-weight: 300;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        margin: 0;
-        color: var(--text-primary);
-    }
-
-    .nav-links {
-        display: flex;
-        gap: 2rem;
-    }
-
     .nav-link {
-        font-size: 0.875rem;
-        font-weight: 300;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        text-decoration: none;
-        color: inherit;
-        opacity: 0.7;
-        transition: opacity 0.2s ease;
         background: transparent;
         border: none;
         cursor: pointer;
         padding: 0;
-    }
-
-    .nav-link:hover {
-        opacity: 1;
     }
 
     .settings-section {
@@ -317,72 +399,10 @@
         width: 100%;
     }
 
-    .section-title {
-        font-size: 0.875rem;
-        font-weight: 300;
-        letter-spacing: 0.1em;
-        color: var(--text-primary);
-        margin: 0 0 1rem 0;
-        opacity: 0.8;
-    }
-
-    :global([data-theme='dark']) .section-title {
-        font-weight: 500;
-    }
-
-    :global([data-theme='light']) .section-title {
-        font-weight: 200;
-    }
-
     form {
         display: flex;
         flex-direction: column;
         gap: 1.5rem;
-    }
-
-    .form-group {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    label {
-        font-size: 0.75rem;
-        font-weight: 300;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--text-primary);
-        opacity: 0.7;
-    }
-
-    :global([data-theme='light']) label {
-        font-weight: 200;
-    }
-
-    input {
-        padding: 0.75rem 1rem;
-        font-size: 1rem;
-        line-height: 1.5;
-        font-family: inherit;
-        background: transparent;
-        color: var(--text-primary);
-        border: 1px solid var(--border-subtle);
-        outline: none;
-        transition: border-color 0.2s ease, opacity 0.2s ease;
-    }
-
-    input:focus {
-        border-color: var(--border-active);
-    }
-
-    input:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    input::placeholder {
-        color: var(--text-primary);
-        opacity: 0.3;
     }
 
     .hint {
@@ -392,47 +412,44 @@
         opacity: 0.7;
     }
 
-    .submit-btn {
-        margin-top: 0.5rem;
-        padding: 0.875rem 2rem;
-        font-size: 0.875rem;
-        font-weight: 300;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
+    .hint a {
+        color: var(--text-primary);
+        text-decoration: underline;
+    }
+
+    .api-key-preview {
+        font-family: monospace;
+        padding: 0.75rem;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-subtle);
+        margin: 0;
+    }
+
+    .button-group {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .btn-secondary {
         background: transparent;
         color: var(--text-primary);
-        border: 1px solid;
-        cursor: pointer;
-        transition: all 0.3s ease;
+        border: 1px solid var(--border-subtle);
     }
 
-    :global([data-theme='dark']) .submit-btn {
-        border-color: #ffffff;
-        font-weight: 500;
+    .btn-secondary:hover:not(:disabled) {
+        background: var(--bg-secondary);
     }
 
-    :global([data-theme='light']) .submit-btn {
-        border-color: #000000;
-        font-weight: 200;
+    .btn-danger {
+        background: transparent;
+        color: #dc2626;
+        border: 1px solid #dc2626;
     }
 
-    .submit-btn:hover:not(:disabled) {
-        opacity: 1;
-    }
-
-    :global([data-theme='dark']) .submit-btn:hover:not(:disabled) {
-        background: #ffffff;
-        color: #000000;
-    }
-
-    :global([data-theme='light']) .submit-btn:hover:not(:disabled) {
-        background: #000000;
-        color: #ffffff;
-    }
-
-    .submit-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
+    .btn-danger:hover:not(:disabled) {
+        background: #dc2626;
+        color: white;
     }
 
     @media (max-width: 768px) {

@@ -128,6 +128,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let presence_state = services::presence::PresenceState::new();
     tracing::info!("Presence tracking initialized");
 
+    // Initialize plan broadcast state for WebSocket updates
+    let plan_broadcast_state = services::plan_broadcast::PlanBroadcastState::new();
+    tracing::info!("Plan broadcast state initialized");
+
     // Auth routes
     let auth_routes = Router::new()
         .route("/login", post(handlers::auth::login))
@@ -158,6 +162,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/profile", get(handlers::user::get_profile))
         .route("/profile", put(handlers::user::update_profile))
         .route("/change-password", post(handlers::user::change_password))
+        .route("/api-keys/{provider}", get(handlers::user::get_api_key))
+        .route("/api-keys", post(handlers::user::save_api_key))
+        .route(
+            "/api-keys/{provider}",
+            delete(handlers::user::delete_api_key),
+        )
         .route("/matches", post(handlers::matches::create_match))
         .route_layer(axum::middleware::from_fn_with_state(
             pool.clone(),
@@ -238,6 +248,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             self::middleware::auth::require_admin,
         ));
 
+    // Plan routes (authenticated)
+    let plan_routes = Router::new()
+        .route("/plans", post(handlers::plans::upload_plan))
+        .route(
+            "/plans/{plan_id}/comments",
+            post(handlers::plans::create_comment),
+        )
+        .route(
+            "/comments/{comment_id}/accept",
+            post(handlers::plans::accept_comment),
+        )
+        .route(
+            "/comments/{comment_id}/reject",
+            post(handlers::plans::reject_comment),
+        )
+        .route("/jobs/{job_id}", get(handlers::jobs::get_job_status))
+        .route_layer(axum::middleware::from_fn_with_state(
+            pool.clone(),
+            self::middleware::auth::require_auth,
+        ));
+
     // Public routes (no auth required)
     let public_routes = Router::new()
         .route("/players", get(handlers::players::list_players))
@@ -266,12 +297,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(handlers::seasons::get_season_leaderboard),
         )
         // Match routes
-        .route("/matches", get(handlers::matches::list_matches));
+        .route("/matches", get(handlers::matches::list_matches))
+        // Plan routes (public)
+        .route("/plans", get(handlers::plans::list_plans))
+        .route("/plans/{plan_id}", get(handlers::plans::get_plan))
+        .route(
+            "/plans/{plan_id}/download",
+            get(handlers::plans::download_plan),
+        );
 
     tracing::info!("Routes configured successfully");
 
     // WebSocket route for presence (authentication handled in handler)
     let presence_routes = Router::new().route("/ws", get(handlers::presence::websocket_handler));
+
+    // WebSocket route for plan comments
+    let plan_ws_routes = Router::new().route(
+        "/{plan_id}/ws",
+        get(handlers::plan_ws::plan_websocket_handler),
+    );
 
     // Build our application with routes
     let app = Router::new()
@@ -281,8 +325,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/api/user", user_routes)
         .nest("/api/admin", admin_routes)
         .nest("/api/presence", presence_routes)
+        .nest("/api/plans", plan_ws_routes)
+        .nest("/api", plan_routes)
         .nest("/api", public_routes)
         .with_state(pool)
+        .layer(axum::Extension(plan_broadcast_state))
         .layer(axum::Extension(presence_state))
         .layer(TraceLayer::new_for_http())
         .layer(CookieManagerLayer::new())
@@ -308,7 +355,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("✓ Health check available at http://{}/health", addr);
     tracing::info!("✓ API available at http://{}/api", addr);
 
-    axum::serve(listener, app).await.map_err(|e| {
+    // FIX #8: Enable ConnectInfo for WebSocket rate limiting by IP
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .map_err(|e| {
         tracing::error!("Server error: {}", e);
         e
     })?;

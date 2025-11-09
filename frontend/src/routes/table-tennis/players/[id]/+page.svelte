@@ -545,28 +545,7 @@
 		opacity: 1;
 	}
 
-	.nav-link-btn {
-		font-size: 0.875rem;
-		font-weight: 300;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		text-decoration: none;
-		color: inherit;
-		opacity: 0.7;
-		transition: opacity 0.2s ease;
-		line-height: 1;
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0;
-		margin: 0;
-		font-family: inherit;
-		appearance: none;
-	}
-
-	.nav-link-btn:hover {
-		opacity: 1;
-	}
+	/* nav-link-btn styles now in shared buttons.css */
 
 	.btn-back {
 		display: inline-block;

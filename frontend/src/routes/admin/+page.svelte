@@ -3,7 +3,7 @@
     import { adminApi } from '$lib/api/client';
     import ThemeToggle from '$lib/components/ThemeToggle.svelte';
     import LoginButton from '$lib/components/LoginButton.svelte';
-    import Toast, { showToast } from '$lib/components/Toast.svelte';
+    import { showToast } from '$lib/components/Toast.svelte';
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
 
@@ -157,7 +157,7 @@
                 <button
                     type="submit"
                     disabled={loading}
-                    class="submit-btn"
+                    class="btn"
                 >
                     {loading ? 'CREATING...' : 'CREATE USER'}
                 </button>
@@ -167,9 +167,9 @@
 </main>
 {/if}
 
-<Toast />
-
 <style>
+    /* Using shared styles: buttons.css (.btn, .btn-primary), forms.css (.form-group, label, input), layout.css (.page-header, .nav-links, .section-title) */
+
     .admin-page {
         display: flex;
         flex-direction: column;
@@ -189,42 +189,8 @@
     }
 
     .page-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
         margin-bottom: 0;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         width: 100%;
-    }
-
-    .page-header h1 {
-        font-size: clamp(1.5rem, 4vw, 2.5rem);
-        font-weight: 300;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        margin: 0;
-        color: var(--text-primary);
-    }
-
-    .nav-links {
-        display: flex;
-        gap: 2rem;
-    }
-
-    .nav-links a {
-        font-size: 0.875rem;
-        font-weight: 300;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        text-decoration: none;
-        color: inherit;
-        opacity: 0.7;
-        transition: opacity 0.2s ease;
-    }
-
-    .nav-links a:hover {
-        opacity: 1;
     }
 
     .admin-section {
@@ -237,73 +203,10 @@
         width: 100%;
     }
 
-    .section-title {
-        font-size: 0.875rem;
-        font-weight: 300;
-        letter-spacing: 0.1em;
-        color: var(--text-primary);
-        margin: 0 0 1rem 0;
-        opacity: 0.8;
-    }
-
-    :global([data-theme='dark']) .section-title {
-        font-weight: 500;
-    }
-
-    :global([data-theme='light']) .section-title {
-        font-weight: 200;
-    }
-
     form {
         display: flex;
         flex-direction: column;
         gap: 1.5rem;
-    }
-
-    .form-group {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    label {
-        font-size: 0.75rem;
-        font-weight: 300;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--text-primary);
-        opacity: 0.7;
-    }
-
-    :global([data-theme='light']) label {
-        font-weight: 200;
-    }
-
-    input[type="text"],
-    input[type="password"] {
-        padding: 0.75rem 1rem;
-        font-size: 1rem;
-        line-height: 1.5;
-        font-family: inherit;
-        background: transparent;
-        color: var(--text-primary);
-        border: 1px solid var(--border-subtle);
-        outline: none;
-        transition: border-color 0.2s ease, opacity 0.2s ease;
-    }
-
-    input:focus {
-        border-color: var(--border-active);
-    }
-
-    input:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    input::placeholder {
-        color: var(--text-primary);
-        opacity: 0.3;
     }
 
     .toggle-container {
@@ -372,49 +275,6 @@
 
     .toggle-slider.admin .slider-knob {
         transform: translateX(2rem);
-    }
-
-    .submit-btn {
-        margin-top: 0.5rem;
-        padding: 0.875rem 2rem;
-        font-size: 0.875rem;
-        font-weight: 300;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        background: transparent;
-        color: var(--text-primary);
-        border: 1px solid;
-        cursor: pointer;
-        transition: all 0.3s ease;
-    }
-
-    :global([data-theme='dark']) .submit-btn {
-        border-color: #ffffff;
-        font-weight: 500;
-    }
-
-    :global([data-theme='light']) .submit-btn {
-        border-color: #000000;
-        font-weight: 200;
-    }
-
-    .submit-btn:hover:not(:disabled) {
-        opacity: 1;
-    }
-
-    :global([data-theme='dark']) .submit-btn:hover:not(:disabled) {
-        background: #ffffff;
-        color: #000000;
-    }
-
-    :global([data-theme='light']) .submit-btn:hover:not(:disabled) {
-        background: #000000;
-        color: #ffffff;
-    }
-
-    .submit-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
     }
 
     @media (max-width: 768px) {

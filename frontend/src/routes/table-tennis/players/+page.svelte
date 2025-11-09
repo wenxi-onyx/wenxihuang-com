@@ -5,7 +5,7 @@
 	import { playersApi, adminApi, type PlayerWithStats } from '$lib/api/client';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import LoginButton from '$lib/components/LoginButton.svelte';
-	import Toast, { showToast } from '$lib/components/Toast.svelte';
+	import { showToast } from '$lib/components/Toast.svelte';
 	import ConfirmModal, { confirm } from '$lib/components/ConfirmModal.svelte';
 	import Presence from '$lib/components/Presence.svelte';
 
@@ -112,7 +112,6 @@
 
 <ThemeToggle />
 <LoginButton />
-<Toast />
 <ConfirmModal />
 <Presence />
 
@@ -120,8 +119,9 @@
 	<header class="page-header">
 		<h1>Player Management</h1>
 		<nav class="nav-links">
+			<a href="/table-tennis">LEADERBOARD</a>
 			<a href="/table-tennis/seasons">SEASONS</a>
-			<a href="/table-tennis/admin">ELO ALGORITHMS</a>
+			<a href="/table-tennis/algorithms">ELO ALGORITHMS</a>
 			<button class="nav-link-btn" onclick={() => window.history.back()}>BACK</button>
 		</nav>
 	</header>
@@ -391,55 +391,21 @@
 		margin-bottom: 1rem;
 	}
 
-	.players-table {
-		width: 100%;
-		border-collapse: collapse;
-	}
-
-	.players-table thead {
-		background: transparent;
-		border-bottom: 1px solid var(--border-subtle);
-	}
-
-	.players-table th {
-		padding: 1rem;
-		text-align: left;
-		font-weight: 300;
-		color: var(--text-primary);
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		opacity: 0.8;
-	}
+	/* Base table styles now in shared tables.css */
 
 	.players-table th.sortable {
 		cursor: pointer;
 		user-select: none;
 		transition: opacity 0.2s;
+		position: relative;
 	}
 
 	.players-table th.sortable:hover {
 		opacity: 1;
 	}
 
-	.players-table tbody tr {
-		border-bottom: 1px solid var(--border-subtle);
-		transition: opacity 0.15s;
-	}
-
-	.players-table tbody tr:hover {
-		opacity: 0.8;
-	}
-
 	.players-table tbody tr.inactive-row {
 		opacity: 0.5;
-	}
-
-	.players-table td {
-		padding: 1rem;
-		font-size: 0.875rem;
-		font-weight: 300;
-		color: var(--text-primary);
 	}
 
 	.player-name-link {
@@ -504,23 +470,7 @@
 		background: var(--border-subtle);
 	}
 
-	.btn-view {
-		display: inline-block;
-		padding: 0.5rem 0;
-		font-size: 0.625rem;
-		font-weight: 300;
-		letter-spacing: 0.1em;
-		color: var(--text-primary);
-		text-decoration: underline;
-		text-decoration-thickness: 0.5px;
-		border: none;
-		background: transparent;
-		transition: opacity 0.3s ease;
-	}
-
-	.btn-view:hover {
-		opacity: 0.6;
-	}
+	/* .btn-view now in shared buttons.css */
 
 	.no-results {
 		text-align: center;

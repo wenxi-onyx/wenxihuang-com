@@ -174,7 +174,7 @@ pub async fn recalculate_all_elo(
 
             // Update job progress if job_id is provided
             if let Some(jid) = job_id
-                && let Err(e) = crate::services::jobs::update_job_progress(
+                && let Err(e) = crate::services::jobs::update_job_progress_items(
                     pool,
                     jid,
                     (i + 1) as i32,

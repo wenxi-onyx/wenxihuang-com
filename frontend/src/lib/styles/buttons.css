@@ -1,0 +1,299 @@
+/* Shared Button Styles */
+
+.btn {
+    padding: 0.75rem 2rem;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    background: transparent;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: inherit;
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+}
+
+[data-theme='dark'] .btn {
+    font-weight: 500;
+    color: #ffffff;
+    border-color: #ffffff;
+}
+
+[data-theme='light'] .btn {
+    font-weight: 200;
+    color: #000000;
+    border-color: #000000;
+}
+
+.btn:hover:not(:disabled) {
+    opacity: 1;
+}
+
+[data-theme='dark'] .btn:hover:not(:disabled) {
+    background: #ffffff;
+    color: #000000;
+}
+
+[data-theme='light'] .btn:hover:not(:disabled) {
+    background: #000000;
+    color: #ffffff;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Primary Button - Filled/inverted style */
+button.btn-primary,
+a.btn-primary,
+input.btn-primary {
+    padding: 0.75rem 2rem;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: inherit;
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+}
+
+[data-theme='dark'] button.btn-primary,
+[data-theme='dark'] a.btn-primary,
+[data-theme='dark'] input.btn-primary {
+    font-weight: 500 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    border-color: #ffffff !important;
+}
+
+[data-theme='light'] button.btn-primary,
+[data-theme='light'] a.btn-primary,
+[data-theme='light'] input.btn-primary {
+    font-weight: 200 !important;
+    background: #000000 !important;
+    color: #ffffff !important;
+    border-color: #000000 !important;
+}
+
+[data-theme='dark'] button.btn-primary:hover:not(:disabled),
+[data-theme='dark'] a.btn-primary:hover:not(:disabled),
+[data-theme='dark'] input.btn-primary:hover:not(:disabled) {
+    background: transparent !important;
+    color: #ffffff !important;
+}
+
+[data-theme='light'] button.btn-primary:hover:not(:disabled),
+[data-theme='light'] a.btn-primary:hover:not(:disabled),
+[data-theme='light'] input.btn-primary:hover:not(:disabled) {
+    background: transparent !important;
+    color: #000000 !important;
+}
+
+button.btn-primary:disabled,
+a.btn-primary:disabled,
+input.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Secondary Button - underlined text link style */
+.btn-secondary {
+    background: transparent;
+    border: none;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    text-decoration: underline;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: opacity 0.3s ease;
+    font-family: inherit;
+    padding: 0;
+}
+
+[data-theme='dark'] .btn-secondary {
+    font-weight: 300;
+    text-decoration-thickness: 0.5px;
+}
+
+[data-theme='light'] .btn-secondary {
+    font-weight: 200;
+    text-decoration-thickness: 0.5px;
+}
+
+.btn-secondary:hover {
+    opacity: 0.6;
+}
+
+/* Danger/Delete Button */
+.btn-danger {
+    padding: 0.75rem 2rem;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    background: transparent;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: inherit;
+}
+
+[data-theme='dark'] .btn-danger {
+    font-weight: 500;
+    color: #ff6b6b;
+    border-color: #ff6b6b;
+}
+
+[data-theme='light'] .btn-danger {
+    font-weight: 200;
+    color: #d63031;
+    border-color: #d63031;
+}
+
+[data-theme='dark'] .btn-danger:hover:not(:disabled) {
+    background: #ff6b6b;
+    color: #000000;
+}
+
+[data-theme='light'] .btn-danger:hover:not(:disabled) {
+    background: #d63031;
+    color: #ffffff;
+}
+
+.btn-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Cancel Button */
+button.btn-cancel,
+a.btn-cancel,
+input.btn-cancel {
+    padding: 0.75rem 2rem;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    background: transparent !important;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: inherit;
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+}
+
+[data-theme='dark'] button.btn-cancel,
+[data-theme='dark'] a.btn-cancel,
+[data-theme='dark'] input.btn-cancel {
+    font-weight: 500 !important;
+    color: #ffffff !important;
+    border-color: #ffffff !important;
+    opacity: 0.5 !important;
+}
+
+[data-theme='light'] button.btn-cancel,
+[data-theme='light'] a.btn-cancel,
+[data-theme='light'] input.btn-cancel {
+    font-weight: 200 !important;
+    color: #000000 !important;
+    border-color: #000000 !important;
+    opacity: 0.5 !important;
+}
+
+button.btn-cancel:hover,
+a.btn-cancel:hover,
+input.btn-cancel:hover {
+    opacity: 1 !important;
+}
+
+/* Nav Link Button Style - text link style for back buttons */
+.nav-link-btn {
+    font-size: 0.875rem;
+    font-weight: 300;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: inherit;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+    line-height: 1;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    font-family: inherit;
+    appearance: none;
+}
+
+.nav-link-btn:hover {
+    opacity: 1;
+    background: transparent;
+    color: inherit;
+}
+
+/* Card CTA Button */
+.card-cta {
+    padding: 0.75rem 2rem;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    background: transparent;
+    border: 1px solid;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    font-family: inherit;
+    text-decoration: none;
+    display: inline-block;
+}
+
+[data-theme='dark'] .card-cta {
+    color: #ffffff;
+    border: 1px solid #ffffff;
+    font-weight: 500;
+}
+
+[data-theme='light'] .card-cta {
+    color: #000000;
+    border: 0.5px solid #000000;
+    font-weight: 200;
+}
+
+[data-theme='dark'] .card-cta:hover {
+    background: #ffffff;
+    color: #000000;
+}
+
+[data-theme='light'] .card-cta:hover {
+    background: #000000;
+    color: #ffffff;
+}
+
+/* View/Action Button - compact bordered button */
+.btn-view {
+    display: inline-block;
+    padding: 0.5rem 0.875rem;
+    font-size: 0.625rem;
+    font-weight: 300;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    text-decoration: none;
+}
+
+.btn-view:hover {
+    border-color: var(--border-active);
+    background: var(--border-subtle);
+}

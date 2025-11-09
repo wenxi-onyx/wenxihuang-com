@@ -96,8 +96,8 @@ pub async fn update_job_status(
     Ok(())
 }
 
-/// Update job progress
-pub async fn update_job_progress(
+/// Update job progress (with items)
+pub async fn update_job_progress_items(
     pool: &PgPool,
     job_id: Uuid,
     processed_items: i32,
@@ -116,6 +116,61 @@ pub async fn update_job_progress(
     .await?;
 
     Ok(())
+}
+
+/// Update job progress (with status and percentage)
+pub async fn update_job_progress(
+    pool: &PgPool,
+    job_id: Uuid,
+    status: &str,
+    progress: i32,
+    result_data: Option<serde_json::Value>,
+) -> Result<(), sqlx::Error> {
+    let now = chrono::Utc::now();
+
+    if status == "running" {
+        sqlx::query(
+            "UPDATE jobs SET status = $1, started_at = COALESCE(started_at, $2), progress = $3, result_data = $4 WHERE id = $5"
+        )
+        .bind(status)
+        .bind(now)
+        .bind(progress)
+        .bind(result_data)
+        .bind(job_id)
+        .execute(pool)
+        .await?;
+    } else {
+        sqlx::query("UPDATE jobs SET status = $1, progress = $2, result_data = $3 WHERE id = $4")
+            .bind(status)
+            .bind(progress)
+            .bind(result_data)
+            .bind(job_id)
+            .execute(pool)
+            .await?;
+    }
+
+    Ok(())
+}
+
+/// Mark a job as completed
+pub async fn mark_job_completed(
+    pool: &PgPool,
+    job_id: Uuid,
+    result_data: Option<serde_json::Value>,
+) -> Result<(), sqlx::Error> {
+    update_job_status(pool, job_id, JobStatus::Completed, result_data).await
+}
+
+/// Mark a job as failed
+pub async fn mark_job_failed(
+    pool: &PgPool,
+    job_id: Uuid,
+    error_message: &str,
+) -> Result<(), sqlx::Error> {
+    let result_data = Some(serde_json::json!({
+        "error": error_message
+    }));
+    update_job_status(pool, job_id, JobStatus::Failed, result_data).await
 }
 
 /// Get job by ID

@@ -1,0 +1,85 @@
+/* Shared Form Styles */
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-primary);
+    opacity: 0.7;
+}
+
+:global([data-theme='dark']) label {
+    font-weight: 500;
+}
+
+:global([data-theme='light']) label {
+    font-weight: 200;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+input[type="datetime-local"],
+input[type="date"],
+input[type="time"],
+textarea,
+select {
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    font-family: inherit;
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+    outline: none;
+    transition: border-color 0.2s ease, opacity 0.2s ease;
+    font-weight: 300;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+    border-color: var(--border-active);
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+select {
+    cursor: pointer;
+}
+
+/* Form error states */
+.form-error {
+    color: #ff6b6b;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+/* Form sections */
+.form-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+}

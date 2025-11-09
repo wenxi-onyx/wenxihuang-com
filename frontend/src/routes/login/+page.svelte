@@ -89,7 +89,7 @@
 				/>
 			</div>
 
-			<button type="submit" disabled={loading} class="submit-btn">
+			<button type="submit" disabled={loading} class="btn submit-btn">
 				{#if loading}
 					SIGNING IN...
 				{:else}
@@ -97,7 +97,7 @@
 				{/if}
 			</button>
 
-			<a href="/" class="back-link">BACK TO HOME</a>
+			<a href="/" class="btn-secondary back-link">BACK TO HOME</a>
 		</form>
 	</div>
 </main>
@@ -169,129 +169,22 @@
 		width: 100%;
 	}
 
-	.form-group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	label {
-		font-size: 0.75rem;
-		font-weight: 300;
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		color: var(--text-primary);
-		opacity: 0.7;
-	}
-
-	:global([data-theme='light']) label {
-		font-weight: 200;
-	}
-
-	input {
-		padding: 0.75rem 1rem;
-		font-size: 1rem;
-		font-family: inherit;
-		background: transparent;
-		color: var(--text-primary);
-		border: 1px solid;
-		outline: none;
-		transition: border-color 0.2s ease, opacity 0.2s ease;
-	}
-
-	:global([data-theme='dark']) input {
-		border-color: #ffffff;
-	}
-
-	:global([data-theme='light']) input {
-		border-color: #000000;
-	}
-
-	input:focus {
-		opacity: 1;
-	}
-
-	:global([data-theme='dark']) input:focus {
-		border-color: #ffffff;
-	}
-
-	:global([data-theme='light']) input:focus {
-		border-color: #000000;
-	}
-
-	input:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
+	/* Form group, label, and input styles now use shared classes from forms.css */
 
 	input::placeholder {
 		color: var(--text-primary);
 		opacity: 0.3;
 	}
 
+	/* Button and link styles now use shared .btn and .btn-secondary from buttons.css */
 	.submit-btn {
 		margin-top: 1rem;
 		padding: 0.875rem 2rem;
-		font-size: 0.875rem;
-		font-weight: 300;
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		background: transparent;
-		color: var(--text-primary);
-		border: 1px solid;
-		cursor: pointer;
-		transition: all 0.3s ease;
-	}
-
-	:global([data-theme='dark']) .submit-btn {
-		border-color: #ffffff;
-		font-weight: 500;
-	}
-
-	:global([data-theme='light']) .submit-btn {
-		border-color: #000000;
-		font-weight: 200;
-	}
-
-	.submit-btn:hover:not(:disabled) {
-		opacity: 1;
-	}
-
-	:global([data-theme='dark']) .submit-btn:hover:not(:disabled) {
-		background: #ffffff;
-		color: #000000;
-	}
-
-	:global([data-theme='light']) .submit-btn:hover:not(:disabled) {
-		background: #000000;
-		color: #ffffff;
-	}
-
-	.submit-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
 	}
 
 	.back-link {
 		display: block;
 		text-align: center;
-		font-size: 0.75rem;
-		font-weight: 300;
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		text-decoration: underline;
-		text-decoration-thickness: 0.5px;
-		color: var(--text-primary);
-		opacity: 0.6;
-		transition: opacity 0.3s ease;
-	}
-
-	:global([data-theme='light']) .back-link {
-		font-weight: 200;
-	}
-
-	.back-link:hover {
-		opacity: 1;
 	}
 
 	@media (max-width: 768px) {

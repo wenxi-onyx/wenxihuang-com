@@ -17,6 +17,16 @@ pub enum AuthError {
     InvalidInput(String),
 }
 
+#[derive(Debug)]
+pub enum AppError {
+    Database(String),
+    Internal(String),
+    NotFound(String),
+    BadRequest(String),
+    Forbidden(String),
+    FileSizeTooLarge(String),
+}
+
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
@@ -52,5 +62,31 @@ impl IntoResponse for AuthError {
         }));
 
         (status, body).into_response()
+    }
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        let (status, message) = match self {
+            AppError::Database(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            AppError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
+            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
+            AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg),
+            AppError::FileSizeTooLarge(msg) => (StatusCode::PAYLOAD_TOO_LARGE, msg),
+        };
+
+        let body = Json(json!({
+            "error": message,
+        }));
+
+        (status, body).into_response()
+    }
+}
+
+// Convert from sqlx::Error to AppError
+impl From<sqlx::Error> for AppError {
+    fn from(e: sqlx::Error) -> Self {
+        AppError::Database(e.to_string())
     }
 }

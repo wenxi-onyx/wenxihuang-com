@@ -5,7 +5,7 @@
 	import { matchesApi, type MatchWithDetails } from '$lib/api/client';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import LoginButton from '$lib/components/LoginButton.svelte';
-	import Toast, { showToast } from '$lib/components/Toast.svelte';
+	import { showToast } from '$lib/components/Toast.svelte';
 	import ConfirmModal, { confirm } from '$lib/components/ConfirmModal.svelte';
 	import AddMatchModal, { openAddMatchModal } from '$lib/components/AddMatchModal.svelte';
 	import Presence from '$lib/components/Presence.svelte';
@@ -140,7 +140,6 @@
 
 <ThemeToggle />
 <LoginButton />
-<Toast />
 <ConfirmModal />
 <AddMatchModal />
 <Presence />

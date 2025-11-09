@@ -5,7 +5,7 @@
 	import { goto } from '$app/navigation';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import LoginButton from '$lib/components/LoginButton.svelte';
-	import Toast, { showToast } from '$lib/components/Toast.svelte';
+	import { showToast } from '$lib/components/Toast.svelte';
 	import ConfirmModal, { confirm } from '$lib/components/ConfirmModal.svelte';
 
 	let seasons: Season[] = $state([]);
@@ -414,13 +414,15 @@
 
 <ThemeToggle />
 <LoginButton />
-<Toast />
 <ConfirmModal />
 
 <div class="container">
 	<header class="page-header">
 		<h1>Season Management</h1>
 		<nav class="nav-links">
+			<a href="/table-tennis">LEADERBOARD</a>
+			<a href="/table-tennis/algorithms">ELO ALGORITHMS</a>
+			<a href="/table-tennis/players">PLAYERS</a>
 			<button class="nav-link-btn" onclick={() => window.history.back()}>BACK</button>
 		</nav>
 	</header>
@@ -852,28 +854,7 @@
 		opacity: 1;
 	}
 
-	.nav-link-btn {
-		font-size: 0.875rem;
-		font-weight: 300;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		text-decoration: none;
-		color: inherit;
-		opacity: 0.7;
-		transition: opacity 0.2s ease;
-		line-height: 1;
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0;
-		margin: 0;
-		font-family: inherit;
-		appearance: none;
-	}
-
-	.nav-link-btn:hover {
-		opacity: 1;
-	}
+	/* nav-link-btn styles now in shared buttons.css */
 
 	.content {
 		display: flex;

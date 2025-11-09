@@ -172,6 +172,9 @@
 	<header class="page-header">
 		<h1>ELO Algorithm Configurator</h1>
 		<nav class="nav-links">
+			<a href="/table-tennis">LEADERBOARD</a>
+			<a href="/table-tennis/seasons">SEASONS</a>
+			<a href="/table-tennis/players">PLAYERS</a>
 			<button class="nav-link-btn" onclick={() => window.history.back()}>BACK</button>
 		</nav>
 	</header>
@@ -256,7 +259,7 @@
 					</div>
 
 					<div class="config-actions">
-						<button class="btn btn-sm btn-primary" onclick={() => startEdit(config)}>
+						<button class="btn btn-sm" onclick={() => startEdit(config)}>
 							Edit
 						</button>
 						{#if !config.is_active}
@@ -450,28 +453,7 @@
 		opacity: 1;
 	}
 
-	.nav-link-btn {
-		font-size: 0.875rem;
-		font-weight: 300;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		text-decoration: none;
-		color: inherit;
-		opacity: 0.7;
-		transition: opacity 0.2s ease;
-		line-height: 1;
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0;
-		margin: 0;
-		font-family: inherit;
-		appearance: none;
-	}
-
-	.nav-link-btn:hover {
-		opacity: 1;
-	}
+	/* nav-link-btn styles now in shared buttons.css */
 
 	.alert {
 		padding: 1rem 1.5rem;
@@ -802,6 +784,8 @@
 		padding: 1.5rem;
 		position: relative;
 		transition: border-color 0.2s ease;
+		display: flex;
+		flex-direction: column;
 	}
 
 	.config-card:hover {
@@ -838,7 +822,9 @@
 	}
 
 	.config-details {
-		margin-bottom: 1.5rem;
+		flex: 1;
+		display: flex;
+		flex-direction: column;
 	}
 
 	.detail-row {
@@ -898,7 +884,8 @@
 	}
 
 	.config-date {
-		margin: 1rem 0 0;
+		margin-top: auto;
+		padding-top: 1rem;
 		font-size: 0.75rem;
 		font-weight: 300;
 		color: var(--text-primary);
@@ -911,6 +898,7 @@
 		gap: 0.5rem;
 		padding-top: 1rem;
 		border-top: 1px solid var(--border-subtle);
+		margin-top: auto;
 	}
 
 	/* Modal Styles */
