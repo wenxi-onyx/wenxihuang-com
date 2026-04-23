@@ -53,9 +53,3 @@ pub async fn require_admin(
 
     Ok(next.run(request).await)
 }
-
-/// Helper function to extract user from request extensions
-#[allow(dead_code)]
-pub fn get_user_from_request(request: &Request) -> Option<&User> {
-    request.extensions().get::<User>()
-}

@@ -4,10 +4,12 @@
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import LoginButton from '$lib/components/LoginButton.svelte';
 	import CommentableMarkdownViewer from '$lib/components/CommentableMarkdownViewer.svelte';
+	import MarkdownPreview from '$lib/components/MarkdownPreview.svelte';
 	import Presence from '$lib/components/Presence.svelte';
 	import ToggleSwitch from '$lib/components/ToggleSwitch.svelte';
 	import { planCommentsStore } from '$lib/stores/planComments';
 	import { authStore } from '$lib/stores/auth';
+	import { userApi } from '$lib/api/client';
 
 	const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8083';
 	const JOB_POLL_INTERVAL_MS = 2000;
@@ -57,6 +59,7 @@
 	let loading = $state(true);
 	let error = $state('');
 	let showResolvedColumn = $state(false);
+	let showMarkdownPreview = $state(false);
 	let activeCommentId: string | null = $state(null);
 	let selectedLineStart: number | null = $state(null);
 	let selectedLineEnd: number | null = $state(null);
@@ -69,6 +72,8 @@
 	let jobPolling: { [key: string]: { interval: NodeJS.Timeout; retries: number } } = {};
 	let wsError = $state('');
 	let viewerRef: any = $state(null);
+	let hasApiKey = $state(false);
+	let apiKeyLoading = $state(false);
 
 	// Get active (non-resolved) comment thread line ranges for highlighting
 	const activeCommentThreadLines = $derived.by(() => {
@@ -172,6 +177,9 @@
 			if (response.ok) {
 				const data = await response.json();
 				planData = data;
+
+				// Check API key status if user is the owner
+				await checkApiKeyStatus();
 			} else {
 				const errorData = await response.text();
 				console.error('Failed to load plan:', response.status, errorData);
@@ -182,6 +190,25 @@
 			console.error('Error loading plan:', err);
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function checkApiKeyStatus() {
+		const currentUser = $authStore.user;
+		if (!currentUser || !planData) return;
+
+		// Only check API key if user is the owner
+		if (currentUser.id !== planData.plan.owner_id) return;
+
+		try {
+			apiKeyLoading = true;
+			const apiKeyResponse = await userApi.getApiKey('anthropic');
+			hasApiKey = apiKeyResponse.has_key;
+		} catch (error) {
+			// Silently fail - user might not have API key set yet
+			hasApiKey = false;
+		} finally {
+			apiKeyLoading = false;
 		}
 	}
 
@@ -331,7 +358,7 @@
 			});
 
 			if (response.ok) {
-				await loadPlan();
+				// WebSocket will handle the comment update automatically via comment_updated message
 			} else {
 				const data = await response.json();
 				error = data.error || 'Failed to reject comment';
@@ -784,18 +811,25 @@
 			<div class="plan-content-container">
 				<div class="panel-header">
 					<span>Plan Content</span>
-					<ToggleSwitch bind:checked={showResolvedColumn} label="Show Resolved" />
+					<div class="panel-controls">
+						<ToggleSwitch bind:checked={showMarkdownPreview} label="Preview Markdown" />
+						<ToggleSwitch bind:checked={showResolvedColumn} label="Show Resolved" />
+					</div>
 				</div>
 				<div class="editor-wrapper">
-					<CommentableMarkdownViewer
-						bind:this={viewerRef}
-						content={planData.plan.content}
-						onselectionchange={handleSelectionChange}
-						onclearselection={handleClearSelection}
-						highlightedLineStart={selectedLineStart}
-						highlightedLineEnd={selectedLineEnd}
-						commentThreadLines={activeCommentThreadLines}
-					/>
+					{#if showMarkdownPreview}
+						<MarkdownPreview content={planData.plan.content} />
+					{:else}
+						<CommentableMarkdownViewer
+							bind:this={viewerRef}
+							content={planData.plan.content}
+							onselectionchange={handleSelectionChange}
+							onclearselection={handleClearSelection}
+							highlightedLineStart={selectedLineStart}
+							highlightedLineEnd={selectedLineEnd}
+							commentThreadLines={activeCommentThreadLines}
+						/>
+					{/if}
 
 					{#if showCommentButton}
 						<button
@@ -890,8 +924,9 @@
 									<div class="comment-actions">
 										<button
 											onclick={() => acceptComment(comment.id)}
-											disabled={processingAction === comment.id}
+											disabled={processingAction === comment.id || !hasApiKey}
 											class="accept-btn"
+											title={!hasApiKey ? 'Set an Anthropic API key in Settings to accept comments' : ''}
 										>
 											{processingAction === comment.id ? 'Processing...' : 'Accept'}
 										</button>
@@ -1079,6 +1114,12 @@
 		opacity: 0.8;
 		display: flex;
 		justify-content: space-between;
+		align-items: center;
+	}
+
+	.panel-controls {
+		display: flex;
+		gap: 1.5rem;
 		align-items: center;
 	}
 

@@ -6,7 +6,7 @@
 	import { markdown } from '@codemirror/lang-markdown';
 	import { oneDark } from '@codemirror/theme-one-dark';
 	import { defaultKeymap, selectAll } from '@codemirror/commands';
-	import { syntaxHighlighting, LanguageDescription } from '@codemirror/language';
+	import { syntaxHighlighting, LanguageDescription, foldGutter, foldKeymap } from '@codemirror/language';
 	import { classHighlighter } from '@lezer/highlight';
 
 	// Language support for code blocks
@@ -233,7 +233,8 @@
 					opacity: dark ? '0.5' : '0.3',
 					border: 'none',
 					fontFamily: "'Monaco', 'Courier New', monospace",
-					fontSize: '0.75rem'
+					fontSize: '0.75rem',
+					paddingLeft: '0.5rem'
 				},
 				'.cm-activeLineGutter': {
 					backgroundColor: 'transparent',
@@ -336,8 +337,11 @@
 
 			const extensions = [
 				markdown({ codeLanguages }),
-				// Add Ctrl/Cmd+A for select all
+				// Add folding support for collapsing sections
+				foldGutter(),
+				// Add Ctrl/Cmd+A for select all and folding keyboard shortcuts
 				keymap.of([
+					...foldKeymap,
 					{ key: 'Mod-a', run: selectAll },
 					...defaultKeymap
 				]),
