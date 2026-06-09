@@ -1,8 +1,3 @@
-# Plans directory (v2 feature)
-# Ignore all subdirectories in plans/ except mult-chatgpt/
-/plans/*
-!/plans/mult-chatgpt/
-
 # IDE
 .vscode/*
 !.vscode/*.template
@@ -32,11 +27,7 @@ credentials/
 # Dependencies
 node_modules/
 
-# Rust build artifacts
-target/
-Cargo.lock  # Commented out - should be committed for applications
-
-# Frontend build artifacts
+# Build artifacts
 .svelte-kit/
 build/
 dist/
@@ -51,10 +42,16 @@ yarn-error.log*
 pnpm-debug.log*
 logs/
 
-# Database
+# Database (SQLite lives on the Fly volume, never in git)
 *.sqlite
 *.sqlite3
 *.db
+*.db-shm
+*.db-wal
+apps/api/data/
+
+# Postgres migration backups (keep locally, never commit)
+apps/api/backup/
 
 # Backups
 *.bak

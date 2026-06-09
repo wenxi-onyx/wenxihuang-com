@@ -1,0 +1,15 @@
+{
+  "name": "wenxihuang-com",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "dev": "pnpm --parallel --filter ./apps/* dev",
+    "build": "pnpm --filter ./apps/* build",
+    "check": "pnpm --filter ./apps/* check",
+    "start": "node apps/api/dist/index.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
