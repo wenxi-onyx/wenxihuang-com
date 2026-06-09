@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
-import { existsSync } from 'node:fs';
+import { existsSync, renameSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ensureAdminUser } from './auth.js';
@@ -22,9 +22,24 @@ const DATABASE_PATH = process.env.DATABASE_PATH ?? join(here, '..', 'data', 'dev
 // (local API-only dev), the API runs alone and the web app runs on Vite.
 const WEB_BUILD_DIR = process.env.WEB_BUILD_DIR ?? resolve(here, '..', '..', 'web', 'build');
 
+/**
+ * Restore mechanism: if a sibling `site-import.db` exists (uploaded via
+ * `fly ssh sftp`), swap it in before the database is opened, then restart.
+ */
+function swapInImportedDb(): void {
+  const importPath = join(dirname(DATABASE_PATH), 'site-import.db');
+  if (!existsSync(importPath)) return;
+  for (const suffix of ['-wal', '-shm']) {
+    rmSync(DATABASE_PATH + suffix, { force: true });
+  }
+  renameSync(importPath, DATABASE_PATH);
+  console.log(`Imported database from ${importPath}`);
+}
+
 async function main(): Promise<void> {
   const app = Fastify({ logger: true, trustProxy: true });
 
+  swapInImportedDb();
   const db = openDb(DATABASE_PATH);
   app.log.info(`SQLite database at ${DATABASE_PATH}`);
   await ensureAdminUser(db, (msg) => app.log.warn(msg));
