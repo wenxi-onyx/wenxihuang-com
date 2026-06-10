@@ -52,7 +52,16 @@ React) deploys onto this same machine with zero coupling to this codebase:
 - **Routing**: the API process proxies requests for `ssf.wenxihuang.com`
   (Host-header match, hook point marked in `apps/api/src/index.ts`) to the SSF
   port. Add the cert with `fly certs add ssf.wenxihuang.com` and a CNAME.
-  Separate hostname = separate cookies; the two auth systems never interact.
+- **Auth is separate on purpose**: SSF's plan (its `docs/PLAN.md` §2)
+  specifies its own minimal auth — username/password (argon2) + session
+  cookie + invite-code registration, own `users`/`sessions` tables in its own
+  SQLite db. It does NOT reuse this site's accounts. Sharing auth would mean
+  SSF depending on this repo's session schema/API — exactly the coupling this
+  contract forbids — to save a handful of friends one one-time registration.
+  The separate hostname keeps the two session cookies from ever colliding.
+  (If shared accounts are ever truly wanted, the non-coupling way is an
+  SSO-style handoff: this site issues a short-lived signed token that SSF
+  verifies with a shared secret — SSF still owns its own sessions.)
 - **Storage**: SSF owns `/data/ssf/` on the volume (its SQLite db, backups).
   This repo's API only ever touches `/data/site.db`.
 - **Resources**: bump [[vm]] memory in fly.toml if needed when SSF lands.
